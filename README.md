@@ -31,6 +31,90 @@
 $ npm install
 ```
 
+## Docker Setup
+
+This project uses Docker Compose to run PostgreSQL and the NestJS application together.
+
+### Prerequisites
+
+- Docker and Docker Compose installed on your system
+- Node.js and npm (for local development)
+
+### Quick Start
+
+1. **Create a `.env` file** (copy from `.env.example`):
+   ```bash
+   cp .env.example .env
+   ```
+
+2. **Start the services**:
+   ```bash
+   docker-compose up -d
+   ```
+
+   This will:
+   - Start a PostgreSQL database container
+   - Build and start the NestJS application container
+   - Wait for the database to be healthy before starting the app
+
+3. **Run Prisma migrations** (first time setup):
+   ```bash
+   # Option 1: Run inside the app container
+   docker-compose exec app npx prisma migrate dev
+
+   # Option 2: Run locally (if you have DATABASE_URL in .env pointing to localhost:5432)
+   npm run prisma:migrate
+   ```
+
+4. **Generate Prisma Client** (if needed):
+   ```bash
+   docker-compose exec app npm run prisma:generate
+   ```
+
+### Useful Commands
+
+```bash
+# View logs
+docker-compose logs -f app
+docker-compose logs -f postgres
+
+# Stop services
+docker-compose down
+
+# Stop and remove volumes (⚠️ deletes database data)
+docker-compose down -v
+
+# Rebuild containers
+docker-compose build
+
+# Access PostgreSQL directly
+docker-compose exec postgres psql -U postgres -d learnio
+
+# Open Prisma Studio
+docker-compose exec app npx prisma studio
+# Or locally: npm run prisma:studio
+```
+
+### Development Workflow
+
+The Docker setup is configured for development with hot-reload:
+- Source code is mounted as volumes, so changes are reflected immediately
+- The app runs in watch mode (`npm run start:dev`)
+- Database migrations should be run manually when schema changes
+
+### Production Build
+
+To build for production:
+
+```bash
+docker build --target production -t learnio:latest .
+```
+
+The production build will:
+- Run migrations automatically on startup
+- Use optimized production dependencies
+- Run the compiled application
+
 ## Compile and run the project
 
 ```bash
