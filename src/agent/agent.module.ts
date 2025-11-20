@@ -4,6 +4,6 @@ import { AgentController } from './agent.controller';
 
 @Module({
   providers: [AgentService],
-  controllers: [AgentController]
+  controllers: [AgentController],
 })
 export class AgentModule {}
