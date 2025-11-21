@@ -11,7 +11,6 @@ export class UsersService {
     const { email, password } = createUserDto;
 
     // Check if user already exists
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     const existingUser = await (this.prisma as any).user.findUnique({
       where: { email },
     });
@@ -24,7 +23,6 @@ export class UsersService {
     const passwordHash = password;
 
     // Create user
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     const user = await (this.prisma as any).user.create({
       data: {
         email,
@@ -33,7 +31,7 @@ export class UsersService {
     });
 
     // Return user without passwordHash
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-unsafe-assignment
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { passwordHash: _, ...userWithoutPassword } = user;
     return userWithoutPassword as UserResponseDto;
   }

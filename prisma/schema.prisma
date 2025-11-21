@@ -30,6 +30,7 @@ model Document {
   originalFilename String?
   mimeType         String?
   filePath         String          // path to file on disk or cloud
+  content          String?         // extracted text content from PDF
   status           DocumentStatus  @default(PENDING)
   summary          String?         // optional generated summary
   createdAt        DateTime        @default(now())
