@@ -1,0 +1,13 @@
+{
+  "watch": ["src"],
+  "ext": "ts",
+  "ignore": ["src/**/*.spec.ts", "node_modules", "dist"],
+  "exec": "nest start",
+  "env": {
+    "CHOKIDAR_USEPOLLING": "true",
+    "WATCHPACK_POLLING": "true"
+  },
+  "legacyWatch": true,
+  "delay": 1000
+}
+

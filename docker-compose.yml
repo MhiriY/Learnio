@@ -30,6 +30,8 @@ services:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@learnio.com}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
       PGADMIN_CONFIG_SERVER_MODE: 'False'
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
     networks:
       - learnio-network
     depends_on:
@@ -49,6 +51,8 @@ services:
       - PORT=${PORT:-3000}
       - NODE_ENV=${NODE_ENV:-development}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
     depends_on:
       postgres:
         condition: service_healthy
@@ -58,10 +62,11 @@ services:
       - ./src:/app/src
       - ./prisma:/app/prisma
       - /app/node_modules
-    command: npm run start:dev
+    command: npm run start:dev:watch
 
 volumes:
   postgres_data:
+  pgadmin_data:
 
 networks:
   learnio-network:
