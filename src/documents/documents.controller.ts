@@ -1,6 +1,9 @@
 import {
   Controller,
   Post,
+  Get,
+  Patch,
+  Delete,
   UseInterceptors,
   UploadedFile,
   Body,
@@ -18,6 +21,8 @@ import {
 } from '@nestjs/swagger';
 import { DocumentsService } from './documents.service.js';
 import { UploadDocumentDto } from './dto/upload-document.dto.js';
+import { CreateDocumentDto } from './dto/create-document.dto.js';
+import { UpdateDocumentDto } from './dto/update-document.dto.js';
 import { DocumentResponseDto } from './dto/document-response.dto.js';
 import { ExtractTextResponseDto } from './dto/extract-text-response.dto.js';
 import { fileFilter } from './utils/file-filter.util.js';
@@ -93,5 +98,86 @@ export class DocumentsController {
     @Param('id') id: string,
   ): Promise<ExtractTextResponseDto> {
     return this.documentsService.extractTextFromPDF(id);
+  }
+
+  @Post()
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a new document' })
+  @ApiResponse({
+    status: 201,
+    description: 'Document successfully created',
+    type: DocumentResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Validation failed',
+  })
+  async create(
+    @Body() createDocumentDto: CreateDocumentDto,
+  ): Promise<DocumentResponseDto> {
+    return this.documentsService.create(createDocumentDto);
+  }
+
+  @Get()
+  @ApiOperation({ summary: 'Get all documents' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of all documents',
+    type: [DocumentResponseDto],
+  })
+  async findAll(): Promise<DocumentResponseDto[]> {
+    return this.documentsService.findAll();
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get a document by ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Document found',
+    type: DocumentResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Document not found',
+  })
+  async findOne(@Param('id') id: string): Promise<DocumentResponseDto> {
+    return this.documentsService.findOne(id);
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Update a document' })
+  @ApiResponse({
+    status: 200,
+    description: 'Document successfully updated',
+    type: DocumentResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Document not found',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Validation failed',
+  })
+  async update(
+    @Param('id') id: string,
+    @Body() updateDocumentDto: UpdateDocumentDto,
+  ): Promise<DocumentResponseDto> {
+    return this.documentsService.update(id, updateDocumentDto);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete a document' })
+  @ApiResponse({
+    status: 204,
+    description: 'Document successfully deleted',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Document not found',
+  })
+  async remove(@Param('id') id: string): Promise<void> {
+    return this.documentsService.remove(id);
   }
 }

@@ -5,6 +5,8 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { CreateDocumentDto } from './dto/create-document.dto.js';
+import { UpdateDocumentDto } from './dto/update-document.dto.js';
 import { DocumentResponseDto } from './dto/document-response.dto.js';
 import { ExtractTextResponseDto } from './dto/extract-text-response.dto.js';
 import * as fs from 'fs';
@@ -122,5 +124,92 @@ export class DocumentsService {
         `Failed to extract text from PDF: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
+  }
+
+  async create(createDocumentDto: CreateDocumentDto): Promise<DocumentResponseDto> {
+    const document = await (this.prisma as any).document.create({
+      data: createDocumentDto,
+    });
+
+    return {
+      id: document.id,
+      userId: document.userId,
+      originalFilename: document.originalFilename,
+      mimeType: document.mimeType,
+      filePath: document.filePath,
+      createdAt: document.createdAt,
+    } as DocumentResponseDto;
+  }
+
+  async findAll(): Promise<DocumentResponseDto[]> {
+    const documents = await (this.prisma as any).document.findMany();
+    return documents.map((doc: any) => ({
+      id: doc.id,
+      userId: doc.userId,
+      originalFilename: doc.originalFilename,
+      mimeType: doc.mimeType,
+      filePath: doc.filePath,
+      createdAt: doc.createdAt,
+    })) as DocumentResponseDto[];
+  }
+
+  async findOne(id: string): Promise<DocumentResponseDto> {
+    const document = await (this.prisma as any).document.findUnique({
+      where: { id },
+    });
+
+    if (!document) {
+      throw new NotFoundException(`Document with ID ${id} not found`);
+    }
+
+    return {
+      id: document.id,
+      userId: document.userId,
+      originalFilename: document.originalFilename,
+      mimeType: document.mimeType,
+      filePath: document.filePath,
+      createdAt: document.createdAt,
+    } as DocumentResponseDto;
+  }
+
+  async update(
+    id: string,
+    updateDocumentDto: UpdateDocumentDto,
+  ): Promise<DocumentResponseDto> {
+    const document = await (this.prisma as any).document.findUnique({
+      where: { id },
+    });
+
+    if (!document) {
+      throw new NotFoundException(`Document with ID ${id} not found`);
+    }
+
+    const updated = await (this.prisma as any).document.update({
+      where: { id },
+      data: updateDocumentDto,
+    });
+
+    return {
+      id: updated.id,
+      userId: updated.userId,
+      originalFilename: updated.originalFilename,
+      mimeType: updated.mimeType,
+      filePath: updated.filePath,
+      createdAt: updated.createdAt,
+    } as DocumentResponseDto;
+  }
+
+  async remove(id: string): Promise<void> {
+    const document = await (this.prisma as any).document.findUnique({
+      where: { id },
+    });
+
+    if (!document) {
+      throw new NotFoundException(`Document with ID ${id} not found`);
+    }
+
+    await (this.prisma as any).document.delete({
+      where: { id },
+    });
   }
 }
