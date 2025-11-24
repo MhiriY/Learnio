@@ -2,16 +2,22 @@ import { useState } from 'react';
 import { ChatBox } from '../components/ChatBox';
 import { ResponseBox } from '../components/ResponseBox';
 import { askAgent } from '../api/agent';
+import { uploadDocument, DocumentResponseDto } from '../api/documents';
 
 export function LandingPage() {
   const [response, setResponse] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState<string | null>(null);
+  const [uploadedDocument, setUploadedDocument] =
+    useState<DocumentResponseDto | null>(null);
 
   const handleSend = async (prompt: string) => {
     setIsLoading(true);
     setError(null);
     setResponse(null);
+    setUploadMessage(null);
 
     try {
       const agentResponse = await askAgent(prompt);
@@ -23,13 +29,54 @@ export function LandingPage() {
     }
   };
 
+  const handleFileUpload = async (file: File) => {
+    setIsUploading(true);
+    setError(null);
+    setUploadMessage(null);
+    setUploadedDocument(null);
+
+    try {
+      const document = await uploadDocument(file);
+      setUploadedDocument(document);
+      setUploadMessage(
+        `Successfully uploaded: ${document.originalFilename || file.name}`
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to upload document');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   return (
     <div style={styles.page}>
       <div style={styles.card}>
         <h1 style={styles.title}>Learnio AI Agent</h1>
-        <p style={styles.subtitle}>Ask anything and get an AI-powered response</p>
-        
-        <ChatBox onSend={handleSend} isLoading={isLoading} />
+        <p style={styles.subtitle}>
+          Ask anything and get an AI-powered response
+        </p>
+
+        <ChatBox
+          onSend={handleSend}
+          onFileUpload={handleFileUpload}
+          isLoading={isLoading}
+          isUploading={isUploading}
+        />
+
+        {uploadMessage && (
+          <div style={styles.uploadMessage}>
+            <strong>✓ {uploadMessage}</strong>
+            {uploadedDocument && (
+              <div style={styles.documentInfo}>
+                <small>
+                  Document ID: {uploadedDocument.id} | Uploaded:{' '}
+                  {new Date(uploadedDocument.createdAt).toLocaleString()}
+                </small>
+              </div>
+            )}
+          </div>
+        )}
+
         <ResponseBox response={response} isLoading={isLoading} error={error} />
       </div>
     </div>
@@ -65,6 +112,19 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontSize: '16px',
     color: '#6c757d',
     textAlign: 'center',
+  },
+  uploadMessage: {
+    marginTop: '16px',
+    padding: '12px 16px',
+    backgroundColor: '#d4edda',
+    border: '1px solid #c3e6cb',
+    borderRadius: '8px',
+    color: '#155724',
+    fontSize: '14px',
+  },
+  documentInfo: {
+    marginTop: '8px',
+    color: '#6c757d',
   },
 };
 

@@ -451,6 +451,11 @@ The frontend will start on `http://localhost:5173` (or the next available port).
 2. **Click "Send"** to submit your prompt to the backend
 3. **View the response** displayed below the textarea
 
+**File Upload:**
+- Click the **"Upload PDF"** button to upload a PDF document
+- Only PDF files are accepted
+- Upload status and document details will be displayed after upload
+
 ### Frontend Structure
 
 ```
