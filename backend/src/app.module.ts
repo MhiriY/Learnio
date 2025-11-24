@@ -13,7 +13,7 @@ import { QuestionsModule } from './questions/questions.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      envFilePath: '../.env', // Load .env from root directory
     }),
     PrismaModule,
     AgentModule,

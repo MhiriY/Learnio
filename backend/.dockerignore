@@ -17,10 +17,4 @@ test
 *.spec.ts
 .eslintrc.js
 .prettierrc
-frontend
-backend/dist
-backend/node_modules
-backend/uploads
-backend/.env
-backend/.env.local
 

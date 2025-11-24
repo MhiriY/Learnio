@@ -33,87 +33,318 @@ $ npm install
 
 ## Docker Setup
 
-This project uses Docker Compose to run PostgreSQL and the NestJS application together.
+This project uses Docker Compose with separate services for development and production environments.
 
 ### Prerequisites
 
 - Docker and Docker Compose installed on your system
-- Node.js and npm (for local development)
+- Node.js and npm installed locally (for dependency management)
 
-### Quick Start
+### Development Setup
 
-1. **Create a `.env` file** (copy from `.env.example`):
+**Important**: Dependencies are installed on your **host machine**, not inside the container.
+
+1. **Install dependencies locally** (required before starting containers):
+   ```bash
+   npm install
+   ```
+
+2. **Create a `.env` file** (copy from `.env.example`):
    ```bash
    cp .env.example .env
    ```
 
-2. **Start the services**:
+3. **Start development services**:
    ```bash
-   docker-compose up -d
+   docker-compose up backend-dev postgres pgadmin
    ```
 
    This will:
-   - Start a PostgreSQL database container
-   - Build and start the NestJS application container
-   - Wait for the database to be healthy before starting the app
+   - Start PostgreSQL database container
+   - Start pgAdmin container
+   - Generate Prisma Client (if not already generated)
+   - Start the NestJS application in development mode with hot-reload
+   - Mount your local source code and `node_modules` into the container
 
-3. **Run Prisma migrations** (first time setup):
+   **Note**: Prisma Client is automatically generated on container startup. If you modify the Prisma schema, restart the container to regenerate the client.
+
+4. **Run Prisma migrations** (first time setup):
    ```bash
-   # Option 1: Run inside the app container
-   docker-compose exec app npx prisma migrate dev
+   # Option 1: Run inside the container
+   docker-compose exec backend-dev npx prisma migrate dev
 
    # Option 2: Run locally (if you have DATABASE_URL in .env pointing to localhost:5432)
    npm run prisma:migrate
    ```
 
-4. **Generate Prisma Client** (if needed):
+5. **Generate Prisma Client** (if needed):
    ```bash
-   docker-compose exec app npm run prisma:generate
+   # Inside container or locally
+   docker-compose exec backend-dev npx prisma generate
+   # Or locally: npm run prisma:generate
    ```
+
+**Development Workflow:**
+- Install new packages locally: `npm install <package-name>`
+- The container uses your local `node_modules` via volume mount
+- Source code changes are automatically reflected (hot-reload)
+- No need to rebuild containers when adding dependencies
+
+### Production Setup
+
+1. **Build and start production services**:
+   ```bash
+   docker-compose up backend postgres
+   ```
+
+   This will:
+   - Build the production Docker image (multi-stage build)
+   - Bundle all dependencies and compiled code inside the image
+   - Run database migrations automatically on startup
+   - Start the optimized production application
+
+2. **Or build the production image separately**:
+   ```bash
+   docker build --target production -t learnio:latest .
+   docker run -p 3000:3000 --env-file .env learnio:latest
+   ```
+
+**Production Features:**
+- No volume mounts (everything bundled in image)
+- Optimized multi-stage build
+- Production dependencies only
+- Automatic database migrations on startup
+- Non-root user for security
+- Health checks enabled
 
 ### Useful Commands
 
 ```bash
-# View logs
-docker-compose logs -f app
-docker-compose logs -f postgres
+# Development
+docker-compose up backend-dev postgres pgadmin    # Start dev services
+docker-compose logs -f backend-dev                 # View dev logs
+docker-compose exec backend-dev npm run prisma:studio  # Prisma Studio
 
-# Stop services
-docker-compose down
+# Production
+docker-compose up backend postgres                 # Start prod services
+docker-compose logs -f backend                     # View prod logs
 
-# Stop and remove volumes (⚠️ deletes database data)
-docker-compose down -v
+# Database
+docker-compose exec postgres psql -U postgres -d learnio  # Access PostgreSQL
+docker-compose exec backend-dev npx prisma studio        # Prisma Studio (dev)
 
-# Rebuild containers
-docker-compose build
-
-# Access PostgreSQL directly
-docker-compose exec postgres psql -U postgres -d learnio
-
-# Open Prisma Studio
-docker-compose exec app npx prisma studio
-# Or locally: npm run prisma:studio
+# General
+docker-compose down                                # Stop all services
+docker-compose down -v                             # Stop and remove volumes (⚠️ deletes database data)
+docker-compose build backend                       # Rebuild production image
 ```
 
-### Development Workflow
+### Architecture
 
-The Docker setup is configured for development with hot-reload:
-- Source code is mounted as volumes, so changes are reflected immediately
-- The app runs in watch mode (`npm run start:dev`)
-- Database migrations should be run manually when schema changes
+- **`backend-dev`**: Development service using volume mounts, runs `npm run start:dev` with hot-reload
+- **`backend`**: Production service built from Dockerfile, runs compiled `node dist/main.js`
+- **`postgres`**: PostgreSQL 16 database
+- **`pgadmin`**: Database administration interface
 
-### Production Build
+### Dependency Management
 
-To build for production:
+**Development:**
+- Dependencies are installed on your host machine: `npm install`
+- The `node_modules` folder is mounted into the container
+- When you add a new package, install it locally and restart the container
+
+**Production:**
+- Dependencies are installed during Docker build
+- All dependencies are bundled in the final image
+- No runtime dependency installation
+
+## How to Run the Project Locally
+
+This section explains how to run the project on your local machine without Docker.
+
+### Prerequisites
+
+Before running the project locally, ensure you have the following installed:
+
+1. **Node.js** (v20 or higher) - [Download](https://nodejs.org/)
+2. **npm** (comes with Node.js) or **yarn**
+3. **PostgreSQL** (v16 or higher) - [Download](https://www.postgresql.org/download/)
+   - On Windows: Use the official installer or [PostgreSQL for Windows](https://www.postgresql.org/download/windows/)
+   - On macOS: `brew install postgresql@16` or use [Postgres.app](https://postgresapp.com/)
+   - On Linux: `sudo apt-get install postgresql-16` (Ubuntu/Debian) or use your package manager
+
+### Step 1: Install Dependencies
 
 ```bash
-docker build --target production -t learnio:latest .
+npm install
 ```
 
-The production build will:
-- Run migrations automatically on startup
-- Use optimized production dependencies
-- Run the compiled application
+This will install all required dependencies including:
+- NestJS framework and core modules
+- Prisma ORM and client
+- File upload libraries (multer)
+- PDF parsing library (pdf-parse-fixed)
+- Validation libraries (class-validator, class-transformer)
+- OpenAI SDK and LangChain
+- All other project dependencies
+
+### Step 2: Set Up PostgreSQL Database
+
+1. **Start PostgreSQL service**:
+   - Windows: PostgreSQL should run as a Windows service automatically
+   - macOS: `brew services start postgresql@16` or start Postgres.app
+   - Linux: `sudo systemctl start postgresql`
+
+2. **Create the database**:
+   ```bash
+   # Connect to PostgreSQL
+   psql -U postgres
+   
+   # Create the database
+   CREATE DATABASE learnio;
+   
+   # Exit psql
+   \q
+   ```
+
+   **Note**: If your PostgreSQL user is not `postgres` or uses a different password, adjust the connection string accordingly.
+
+### Step 3: Configure Environment Variables
+
+Create a `.env` file in the project root directory:
+
+```bash
+# Copy the example (if you have one) or create manually
+cp .env.example .env
+```
+
+Add the following configuration to your `.env` file:
+
+```env
+# Database Configuration - Update with your local PostgreSQL credentials
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/learnio?schema=public"
+
+# Application Configuration
+PORT=3000
+NODE_ENV=development
+
+# OpenAI API Key (required for AI features)
+OPENAI_API_KEY=your-openai-api-key-here
+```
+
+**Important**: 
+- Replace `postgres:postgres` with your actual PostgreSQL username and password
+- Replace `your-openai-api-key-here` with your actual OpenAI API key
+- If your PostgreSQL runs on a different port, update the port in the DATABASE_URL
+
+### Step 4: Generate Prisma Client
+
+Prisma Client must be generated before running the application:
+
+```bash
+npm run prisma:generate
+```
+
+This command reads your Prisma schema and generates the Prisma Client that your application uses to interact with the database.
+
+### Step 5: Run Database Migrations
+
+Apply the database schema to your local database:
+
+```bash
+npm run prisma:migrate
+```
+
+This will:
+- Apply all pending migrations to your database
+- Create all tables, relationships, and indexes defined in your Prisma schema
+
+**Note**: On first run, this will create the initial database schema. On subsequent runs, it will only apply new migrations.
+
+### Step 6: Start the Development Server
+
+Start the NestJS application in development mode with hot-reload:
+
+```bash
+npm run start:dev
+```
+
+The application will:
+- Start on `http://localhost:3000` (or the port specified in your `.env` file)
+- Watch for file changes and automatically restart
+- Display Swagger API documentation at `http://localhost:3000/api`
+
+### Step 7: Verify the Setup
+
+1. **Check the API is running**:
+   - Open your browser and navigate to `http://localhost:3000/api`
+   - You should see the Swagger API documentation
+
+2. **Test a simple endpoint**:
+   ```bash
+   # Using curl
+   curl http://localhost:3000
+   
+   # Or open in browser
+   open http://localhost:3000
+   ```
+
+### Additional Useful Commands
+
+```bash
+# Generate Prisma Client (after schema changes)
+npm run prisma:generate
+
+# Run database migrations
+npm run prisma:migrate
+
+# Open Prisma Studio (database GUI)
+npm run prisma:studio
+# This will open a web interface at http://localhost:5555
+
+# Build the project for production
+npm run build
+
+# Run the production build
+npm run start:prod
+
+# Run tests
+npm run test
+
+# Run tests in watch mode
+npm run test:watch
+```
+
+### Troubleshooting
+
+**Issue: Cannot connect to database**
+- Verify PostgreSQL is running: `psql -U postgres -c "SELECT version();"`
+- Check your DATABASE_URL in `.env` matches your PostgreSQL credentials
+- Ensure the database `learnio` exists: `psql -U postgres -l`
+
+**Issue: Prisma Client not found**
+- Run `npm run prisma:generate` to generate the client
+- Ensure `node_modules/.prisma` directory exists after generation
+
+**Issue: Port already in use**
+- Change the PORT in your `.env` file
+- Or stop the process using port 3000: `lsof -ti:3000 | xargs kill` (macOS/Linux)
+
+**Issue: Module not found errors**
+- Delete `node_modules` and `package-lock.json`
+- Run `npm install` again
+- Ensure all dependencies are listed in `package.json`
+
+**Issue: Prisma migrations fail**
+- Ensure your database user has CREATE TABLE permissions
+- Check that the database exists: `psql -U postgres -l`
+- Try resetting the database (⚠️ deletes all data): `npx prisma migrate reset`
+
+### File Uploads
+
+When running locally, uploaded files are stored in the `uploads/` directory in your project root. This directory is automatically created when the application starts.
+
+**Note**: Make sure to add `uploads/` to your `.gitignore` file to avoid committing uploaded files to version control.
 
 ## Compile and run the project
 
@@ -166,6 +397,128 @@ Check out a few resources that may come in handy when working with NestJS:
 - Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
 - To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
 - Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+
+## How to Run the React Frontend
+
+The project includes a minimal React frontend built with Vite, React, and TypeScript for interacting with the AI agent backend.
+
+### Prerequisites
+
+- Node.js (v18 or higher) and npm
+- The NestJS backend must be running (see "How to Run the Project Locally" section above)
+
+### Step 1: Navigate to Frontend Directory
+
+```bash
+cd frontend
+```
+
+### Step 2: Install Dependencies
+
+```bash
+npm install
+```
+
+This will install all required dependencies including:
+- React and React DOM
+- Vite (build tool)
+- TypeScript
+- Axios (for API requests)
+- All development dependencies
+
+### Step 3: Configure Backend URL (Optional)
+
+The frontend is configured to connect to `http://localhost:3000` by default. If your backend runs on a different URL or port, create a `.env` file in the `frontend` directory:
+
+```bash
+# frontend/.env
+VITE_API_URL=http://localhost:3000
+```
+
+**Note**: The `VITE_` prefix is required for Vite to expose the variable to your React code.
+
+### Step 4: Start the Development Server
+
+```bash
+npm run dev
+```
+
+The frontend will start on `http://localhost:5173` (or the next available port). Open this URL in your browser to see the application.
+
+### Step 5: Use the Application
+
+1. **Enter a prompt** in the textarea (e.g., "Explain machine learning simply")
+2. **Click "Send"** to submit your prompt to the backend
+3. **View the response** displayed below the textarea
+
+### Frontend Structure
+
+```
+frontend/
+├── src/
+│   ├── api/
+│   │   └── agent.ts          # API client for agent endpoints
+│   ├── components/
+│   │   ├── ChatBox.tsx       # Textarea and send button
+│   │   └── ResponseBox.tsx    # Displays agent response
+│   ├── pages/
+│   │   └── LandingPage.tsx    # Main landing page
+│   ├── App.tsx                # Root component
+│   ├── main.tsx               # Application entry point
+│   ├── index.css              # Global styles
+│   └── App.css                # App-specific styles
+├── index.html                 # HTML template
+├── package.json               # Dependencies and scripts
+├── vite.config.ts             # Vite configuration
+└── tsconfig.json              # TypeScript configuration
+```
+
+### Available Scripts
+
+```bash
+# Start development server with hot-reload
+npm run dev
+
+# Build for production
+npm run build
+
+# Preview production build locally
+npm run preview
+
+# Run linter
+npm run lint
+```
+
+### Troubleshooting
+
+**Issue: Cannot connect to backend**
+- Ensure the NestJS backend is running on `http://localhost:3000`
+- Check that CORS is enabled in your NestJS backend (if running on different ports)
+- Verify the `VITE_API_URL` in your `.env` file matches your backend URL
+
+**Issue: Port 5173 already in use**
+- Vite will automatically try the next available port
+- Or specify a different port in `vite.config.ts`
+
+**Issue: Module not found errors**
+- Delete `node_modules` and `package-lock.json`
+- Run `npm install` again
+
+**Issue: CORS errors**
+- Make sure your NestJS backend has CORS enabled in `main.ts`:
+  ```typescript
+  app.enableCors();
+  ```
+
+### Building for Production
+
+To create a production build:
+
+```bash
+npm run build
+```
+
+The built files will be in the `frontend/dist` directory. You can serve these files with any static file server or deploy them to a hosting service.
 
 ## Support
 

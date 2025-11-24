@@ -1,8 +1,7 @@
-# Compiled output
-**/dist
-**/node_modules
-**/build
-**/coverage
+# compiled output
+/dist
+/node_modules
+/build
 
 # Logs
 logs
@@ -21,9 +20,11 @@ Thumbs.db
 *~
 
 # Tests
-**/.nyc_output
+/coverage
+/.nyc_output
 
 # IDEs and editors
+/.idea
 .idea/
 *.iml
 .project
@@ -59,7 +60,7 @@ pids
 *.seed
 *.pid.lock
 
-# Diagnostic reports
+# Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 # TypeScript build info
@@ -69,24 +70,8 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 *.map
 
 # Prisma
-**/generated/prisma
+/generated/prisma
 
 # Docker
 .docker/
 docker-compose.override.yml
-
-# Frontend specific
-**/dist-ssr
-*.local
-
-# Backend specific
-**/uploads/*
-!**/uploads/.gitkeep
-
-# Editor files
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
