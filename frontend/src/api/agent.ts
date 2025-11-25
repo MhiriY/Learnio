@@ -38,5 +38,13 @@ export async function askAgent(prompt: string): Promise<string> {
     throw error;
   }
 }
+export async function docChat(documentId: string, prompt: string) {
+  const res = await axios.post("http://localhost:3000/agent/doc-chat", {
+    documentId,
+    prompt,
+  });
+
+  return res.data.answer;
+}
 
 

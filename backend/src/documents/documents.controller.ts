@@ -94,9 +94,7 @@ export class DocumentsController {
     status: 500,
     description: 'Failed to extract text from PDF',
   })
-  async extract(
-    @Param('id') id: string,
-  ): Promise<ExtractTextResponseDto> {
+  async extract(@Param('id') id: string): Promise<ExtractTextResponseDto> {
     return this.documentsService.extractTextFromPDF(id);
   }
 

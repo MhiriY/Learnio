@@ -3,6 +3,7 @@ import {
   BadRequestException,
   NotFoundException,
   InternalServerErrorException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateDocumentDto } from './dto/create-document.dto.js';
@@ -16,6 +17,7 @@ import pdf from 'pdf-parse-fixed';
 @Injectable()
 export class DocumentsService {
   private readonly uploadsDir = path.join(process.cwd(), 'uploads');
+  private readonly logger = new Logger(DocumentsService.name);
 
   constructor(private prisma: PrismaService) {
     // Ensure uploads directory exists
@@ -82,6 +84,20 @@ export class DocumentsService {
         filePath: filePath,
       },
     });
+
+    // Automatically extract text for PDFs so doc chat works immediately.
+    if (document.mimeType === 'application/pdf') {
+      try {
+        await this.extractTextFromPDF(document.id);
+      } catch (error) {
+        this.logger.error(
+          `Failed to extract text for document ${document.id}: ${
+            error instanceof Error ? error.message : 'Unknown error'
+          }`,
+        );
+        throw error;
+      }
+    }
 
     return {
       id: document.id,

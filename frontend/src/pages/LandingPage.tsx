@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ChatBox } from '../components/ChatBox';
 import { ResponseBox } from '../components/ResponseBox';
-import { askAgent } from '../api/agent';
+import { askAgent, docChat } from '../api/agent';   // ← ADD docChat import
 import { uploadDocument, DocumentResponseDto } from '../api/documents';
 
 export function LandingPage() {
@@ -13,6 +13,12 @@ export function LandingPage() {
   const [uploadedDocument, setUploadedDocument] =
     useState<DocumentResponseDto | null>(null);
 
+  // This holds the DOCUMENT to use as context
+  const [currentDocumentId, setCurrentDocumentId] = useState<string | null>(null);
+
+  // -------------------------------
+  // FIXED handleSend
+  // -------------------------------
   const handleSend = async (prompt: string) => {
     setIsLoading(true);
     setError(null);
@@ -20,8 +26,18 @@ export function LandingPage() {
     setUploadMessage(null);
 
     try {
-      const agentResponse = await askAgent(prompt);
+      let agentResponse;
+
+      if (currentDocumentId) {
+        // Document-aware chat uses uploaded doc as context
+        agentResponse = await docChat(currentDocumentId, prompt);
+      } else {
+        // Normal chat
+        agentResponse = await askAgent(prompt);
+      }
+
       setResponse(agentResponse);
+
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
     } finally {
@@ -29,6 +45,9 @@ export function LandingPage() {
     }
   };
 
+  // -------------------------------
+  // File upload logic
+  // -------------------------------
   const handleFileUpload = async (file: File) => {
     setIsUploading(true);
     setError(null);
@@ -37,10 +56,17 @@ export function LandingPage() {
 
     try {
       const document = await uploadDocument(file);
+
+      // Store the uploaded document metadata
       setUploadedDocument(document);
+
+      // VERY IMPORTANT: Store its documentId so chat uses it
+      setCurrentDocumentId(document.id);
+
       setUploadMessage(
         `Successfully uploaded: ${document.originalFilename || file.name}`
       );
+
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to upload document');
     } finally {
