@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { ChatBox } from '../components/ChatBox';
 import { ResponseBox } from '../components/ResponseBox';
-import { askAgent, docChat } from '../api/agent';   // ← ADD docChat import
+import { DocumentContextBanner } from '../components/DocumentContextBanner';
+import { askAgent, docChat } from '../api/agent';
 import { uploadDocument, DocumentResponseDto } from '../api/documents';
 
 export function LandingPage() {
@@ -74,6 +75,12 @@ export function LandingPage() {
     }
   };
 
+  const handleClearContext = () => {
+    setUploadedDocument(null);
+    setCurrentDocumentId(null);
+    setUploadMessage(null);
+  };
+
   return (
     <div style={styles.page}>
       <div style={styles.card}>
@@ -89,16 +96,14 @@ export function LandingPage() {
           isUploading={isUploading}
         />
 
-        {uploadMessage && (
-          <div style={styles.uploadMessage}>
-            <strong>✓ {uploadMessage}</strong>
-            {uploadedDocument && (
-              <div style={styles.documentInfo}>
-                <small>
-                  Document ID: {uploadedDocument.id} | Uploaded:{' '}
-                  {new Date(uploadedDocument.createdAt).toLocaleString()}
-                </small>
-              </div>
+        {uploadedDocument && (
+          <div style={styles.contextWrapper}>
+            <DocumentContextBanner
+              document={uploadedDocument}
+              onClear={handleClearContext}
+            />
+            {uploadMessage && (
+              <div style={styles.uploadHint}>✓ {uploadMessage}</div>
             )}
           </div>
         )}
@@ -139,18 +144,15 @@ const styles: { [key: string]: React.CSSProperties } = {
     color: '#6c757d',
     textAlign: 'center',
   },
-  uploadMessage: {
+  contextWrapper: {
     marginTop: '16px',
-    padding: '12px 16px',
-    backgroundColor: '#d4edda',
-    border: '1px solid #c3e6cb',
-    borderRadius: '8px',
-    color: '#155724',
-    fontSize: '14px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
   },
-  documentInfo: {
-    marginTop: '8px',
-    color: '#6c757d',
+  uploadHint: {
+    fontSize: '13px',
+    color: '#16a34a',
   },
 };
 
