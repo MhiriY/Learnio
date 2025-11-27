@@ -18,6 +18,7 @@ async function bootstrap() {
     .setTitle('Learnio API')
     .setDescription('API documentation for the Learnio platform')
     .setVersion('1.0')
+    .addBearerAuth()
     .addTag('agent')
     .build();
 

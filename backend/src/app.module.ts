@@ -8,6 +8,7 @@ import { UsersModule } from './users/users.module';
 import { DocumentsModule } from './documents/documents.module';
 import { DocumentChunksModule } from './document-chunks/document-chunks.module';
 import { QuestionsModule } from './questions/questions.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -18,9 +19,11 @@ import { QuestionsModule } from './questions/questions.module';
     PrismaModule,
     AgentModule,
     UsersModule,
+    AuthModule,
     DocumentsModule,
     DocumentChunksModule,
     QuestionsModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
