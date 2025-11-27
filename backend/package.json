@@ -47,6 +47,7 @@
     "pdf-parse-fixed": "^1.1.1",
     "pg": "^8.13.1",
     "prisma": "^7.0.0",
+    "react-router-dom": "^7.9.6",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "swagger-ui-express": "^5.0.1"

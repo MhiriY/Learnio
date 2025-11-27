@@ -1,11 +1,15 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ChatBox } from '../components/ChatBox';
 import { ResponseBox } from '../components/ResponseBox';
 import { DocumentContextBanner } from '../components/DocumentContextBanner';
 import { askAgent, docChat } from '../api/agent';
 import { uploadDocument, DocumentResponseDto } from '../api/documents';
+import { useAuth } from '../auth/useAuth';
 
 export function LandingPage() {
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [response, setResponse] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,13 +85,32 @@ export function LandingPage() {
     setUploadMessage(null);
   };
 
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
   return (
     <div style={styles.page}>
       <div style={styles.card}>
-        <h1 style={styles.title}>Learnio AI Agent</h1>
-        <p style={styles.subtitle}>
-          Ask anything and get an AI-powered response
-        </p>
+        <div style={styles.header}>
+          <div>
+            <h1 style={styles.title}>Learnio AI Agent</h1>
+            <p style={styles.subtitle}>
+              Ask anything and get an AI-powered response
+            </p>
+          </div>
+          <div style={styles.userSection}>
+            {user && (
+              <span style={styles.userInfo}>
+                {user.name || user.email}
+              </span>
+            )}
+            <button onClick={handleLogout} style={styles.logoutButton}>
+              Logout
+            </button>
+          </div>
+        </div>
 
         <ChatBox
           onSend={handleSend}
@@ -131,18 +154,44 @@ const styles: { [key: string]: React.CSSProperties } = {
     width: '100%',
     maxWidth: '600px',
   },
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: '24px',
+  },
   title: {
     margin: '0 0 8px 0',
     fontSize: '28px',
     fontWeight: '700',
     color: '#212529',
-    textAlign: 'center',
+    textAlign: 'left',
   },
   subtitle: {
-    margin: '0 0 24px 0',
+    margin: '0',
     fontSize: '16px',
     color: '#6c757d',
-    textAlign: 'center',
+    textAlign: 'left',
+  },
+  userSection: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+  },
+  userInfo: {
+    fontSize: '14px',
+    color: '#6c757d',
+  },
+  logoutButton: {
+    padding: '8px 16px',
+    fontSize: '14px',
+    fontWeight: '500',
+    color: '#fff',
+    backgroundColor: '#dc3545',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s',
   },
   contextWrapper: {
     marginTop: '16px',

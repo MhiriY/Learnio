@@ -33,38 +33,13 @@ export class DocumentsService {
 
     // File type validation is handled by multer fileFilter
 
-    // Ensure user exists (for test-user, create if doesn't exist)
-    // TODO: Replace with proper authentication
-    let user = await (this.prisma as any).user.findUnique({
+    // Ensure user exists (user should be authenticated via JWT, but verify anyway)
+    const user = await (this.prisma as any).user.findUnique({
       where: { id: userId },
     });
 
     if (!user) {
-      // For test-user, create a temporary user if it doesn't exist
-      // In production, this should throw an error instead
-      if (userId === 'test-user') {
-        // Try to find existing test user by email pattern, or create new one
-        const testEmail = 'test-user@example.com';
-        user = await (this.prisma as any).user.findUnique({
-          where: { email: testEmail },
-        });
-
-        if (!user) {
-          // Create test user with the specified ID
-          user = await (this.prisma as any).user.create({
-            data: {
-              id: userId,
-              email: testEmail,
-              passwordHash: 'temp-password', // Temporary, will be replaced with auth
-            },
-          });
-        } else {
-          // User exists but with different ID, use that ID instead
-          userId = user.id;
-        }
-      } else {
-        throw new BadRequestException(`User with ID ${userId} does not exist`);
-      }
+      throw new BadRequestException(`User with ID ${userId} does not exist`);
     }
 
     // Generate unique filename

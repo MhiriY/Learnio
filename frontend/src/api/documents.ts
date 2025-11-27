@@ -1,6 +1,5 @@
+import axiosInstance from './axiosInstance';
 import axios from 'axios';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 export interface DocumentResponseDto {
   id: string;
@@ -14,20 +13,17 @@ export interface DocumentResponseDto {
 /**
  * Uploads a PDF document to the backend
  * @param file - The PDF file to upload
- * @param userId - The user ID (temporary, will be replaced with auth later)
  * @returns The uploaded document metadata
  */
 export async function uploadDocument(
   file: File,
-  userId: string = 'test-user',
 ): Promise<DocumentResponseDto> {
   try {
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('userId', userId);
 
-    const response = await axios.post<DocumentResponseDto>(
-      `${API_BASE_URL}/documents/upload`,
+    const response = await axiosInstance.post<DocumentResponseDto>(
+      '/documents/upload',
       formData,
       {
         headers: {

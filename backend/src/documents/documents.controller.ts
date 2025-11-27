@@ -10,6 +10,8 @@ import {
   Param,
   HttpCode,
   HttpStatus,
+  UseGuards,
+  Request,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -18,6 +20,7 @@ import {
   ApiResponse,
   ApiConsumes,
   ApiBody,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { DocumentsService } from './documents.service.js';
 import { UploadDocumentDto } from './dto/upload-document.dto.js';
@@ -26,6 +29,7 @@ import { UpdateDocumentDto } from './dto/update-document.dto.js';
 import { DocumentResponseDto } from './dto/document-response.dto.js';
 import { ExtractTextResponseDto } from './dto/extract-text-response.dto.js';
 import { fileFilter } from './utils/file-filter.util.js';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 
 @ApiTags('documents')
 @Controller('documents')
@@ -34,6 +38,8 @@ export class DocumentsController {
 
   @Post('upload')
   @HttpCode(HttpStatus.CREATED)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @UseInterceptors(
     FileInterceptor('file', {
       fileFilter: fileFilter,
@@ -50,12 +56,8 @@ export class DocumentsController {
           format: 'binary',
           description: 'PDF or PPTX file to upload',
         },
-        userId: {
-          type: 'string',
-          description: 'ID of the user uploading the document',
-        },
       },
-      required: ['file', 'userId'],
+      required: ['file'],
     },
   })
   @ApiResponse({
@@ -67,11 +69,17 @@ export class DocumentsController {
     status: 400,
     description: 'Invalid file type or missing file',
   })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized',
+  })
   async upload(
     @UploadedFile() file: any,
-    @Body() uploadDto: UploadDocumentDto,
+    @Request() req: any,
   ): Promise<DocumentResponseDto> {
-    return this.documentsService.uploadFile(file, uploadDto.userId);
+    // Get user ID from JWT token (set by JwtStrategy)
+    const userId = req.user.id;
+    return this.documentsService.uploadFile(file, userId);
   }
 
   @Post(':id/extract')
