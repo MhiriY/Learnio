@@ -12,6 +12,7 @@ import {
   HttpStatus,
   UseGuards,
   Request,
+  ForbiddenException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -23,6 +24,7 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { DocumentsService } from './documents.service.js';
+import { DocumentProcessingService } from './document-processing.service.js';
 import { UploadDocumentDto } from './dto/upload-document.dto.js';
 import { CreateDocumentDto } from './dto/create-document.dto.js';
 import { UpdateDocumentDto } from './dto/update-document.dto.js';
@@ -34,7 +36,10 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 @ApiTags('documents')
 @Controller('documents')
 export class DocumentsController {
-  constructor(private readonly documentsService: DocumentsService) {}
+  constructor(
+    private readonly documentsService: DocumentsService,
+    private readonly documentProcessingService: DocumentProcessingService,
+  ) {}
 
   @Post('upload')
   @HttpCode(HttpStatus.CREATED)
@@ -170,6 +175,66 @@ export class DocumentsController {
     @Body() updateDocumentDto: UpdateDocumentDto,
   ): Promise<DocumentResponseDto> {
     return this.documentsService.update(id, updateDocumentDto);
+  }
+
+  @Get(':id/chunks')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all chunks for a document' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of document chunks',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Document not found',
+  })
+  async getChunks(@Param('id') id: string, @Request() req: any) {
+    // Verify document ownership
+    const document = await this.documentsService.findOne(id);
+    if (document.userId !== req.user.id) {
+      throw new ForbiddenException('You do not have access to this document');
+    }
+
+    // Access Prisma through DocumentsService's prisma property
+    const prisma = (this.documentsService as any).prisma;
+    const chunks = await prisma.documentChunk.findMany({
+      where: { documentId: id },
+      orderBy: { index: 'asc' },
+      select: {
+        id: true,
+        index: true,
+        content: true,
+        createdAt: true,
+        // Don't return embedding (too large)
+      },
+    });
+
+    return chunks;
+  }
+
+  @Post(':id/rebuild')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Rebuild chunks and embeddings for a document' })
+  @ApiResponse({
+    status: 200,
+    description: 'Chunks and embeddings successfully rebuilt',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Document not found',
+  })
+  async rebuild(@Param('id') id: string, @Request() req: any) {
+    // Verify document ownership
+    const document = await this.documentsService.findOne(id);
+    if (document.userId !== req.user.id) {
+      throw new ForbiddenException('You do not have access to this document');
+    }
+
+    await this.documentProcessingService.processDocument(id);
+    return { message: 'Chunks and embeddings rebuilt successfully' };
   }
 
   @Delete(':id')

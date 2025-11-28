@@ -10,6 +10,7 @@ import type { Response } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConversationsService } from '../conversations/conversations.service';
 import { MessagesService } from '../messages/messages.service';
+import { RetrievalService } from '../retrieval/retrieval.service';
 
 @Injectable()
 export class AgentService {
@@ -21,6 +22,7 @@ export class AgentService {
     private readonly prisma: PrismaService,
     private readonly conversationsService: ConversationsService,
     private readonly messagesService: MessagesService,
+    private readonly retrievalService?: RetrievalService,
   ) {
     const apiKey = this.configService.get<string>('OPENAI_API_KEY');
     if (!apiKey) {
@@ -100,6 +102,7 @@ ${doc.content}
 
     // Build system prompt
     let systemPrompt = 'You are a helpful AI assistant.';
+    let contextChunks: string[] = [];
 
     if (documentId) {
       const doc = await this.prisma.document.findUnique({
@@ -115,7 +118,57 @@ ${doc.content}
         throw new ForbiddenException('You do not have access to this document');
       }
 
-      if (doc.content) {
+      // Use RAG retrieval if available, otherwise fall back to full content
+      if (this.retrievalService) {
+        try {
+          const relevantChunks =
+            await this.retrievalService.retrieveRelevantChunks(
+              documentId,
+              prompt,
+              5, // top-K
+            );
+
+          if (relevantChunks.length > 0) {
+            contextChunks = relevantChunks.map(
+              (chunk) => `[Chunk ${chunk.index}]: ${chunk.content}`,
+            );
+            systemPrompt = `
+You are an academic assistant. 
+You must strictly use the following retrieved context from the document to answer user questions.
+If something is not in the provided context, say "The information is not available in the provided document."
+
+Retrieved Context:
+${contextChunks.join('\n\n---\n\n')}
+            `;
+          } else if (doc.content) {
+            // Fallback to full content if no chunks found
+            systemPrompt = `
+You are an academic assistant. 
+You must strictly use the following document content to answer user questions.
+If something is not in the document, say "The information is not available in the provided document."
+
+Document Content:
+${doc.content}
+            `;
+          }
+        } catch (error) {
+          this.logger.warn(
+            `RAG retrieval failed, falling back to full content: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          );
+          // Fallback to full content on error
+          if (doc.content) {
+            systemPrompt = `
+You are an academic assistant. 
+You must strictly use the following document content to answer user questions.
+If something is not in the document, say "The information is not available in the provided document."
+
+Document Content:
+${doc.content}
+            `;
+          }
+        }
+      } else if (doc.content) {
+        // Fallback if retrieval service not available
         systemPrompt = `
 You are an academic assistant. 
 You must strictly use the following document content to answer user questions.
@@ -207,6 +260,7 @@ ${doc.content}
 
     // Build system prompt
     let systemPrompt = 'You are a helpful AI assistant.';
+    let contextChunks: string[] = [];
 
     if (documentId) {
       const doc = await this.prisma.document.findUnique({
@@ -221,7 +275,57 @@ ${doc.content}
         throw new ForbiddenException('You do not have access to this document');
       }
 
-      if (doc.content) {
+      // Use RAG retrieval if available, otherwise fall back to full content
+      if (this.retrievalService) {
+        try {
+          const relevantChunks =
+            await this.retrievalService.retrieveRelevantChunks(
+              documentId,
+              prompt,
+              5, // top-K
+            );
+
+          if (relevantChunks.length > 0) {
+            contextChunks = relevantChunks.map(
+              (chunk) => `[Chunk ${chunk.index}]: ${chunk.content}`,
+            );
+            systemPrompt = `
+You are an academic assistant. 
+You must strictly use the following retrieved context from the document to answer user questions.
+If something is not in the provided context, say "The information is not available in the provided document."
+
+Retrieved Context:
+${contextChunks.join('\n\n---\n\n')}
+            `;
+          } else if (doc.content) {
+            // Fallback to full content if no chunks found
+            systemPrompt = `
+You are an academic assistant. 
+You must strictly use the following document content to answer user questions.
+If something is not in the document, say "The information is not available in the provided document."
+
+Document Content:
+${doc.content}
+            `;
+          }
+        } catch (error) {
+          this.logger.warn(
+            `RAG retrieval failed, falling back to full content: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          );
+          // Fallback to full content on error
+          if (doc.content) {
+            systemPrompt = `
+You are an academic assistant. 
+You must strictly use the following document content to answer user questions.
+If something is not in the document, say "The information is not available in the provided document."
+
+Document Content:
+${doc.content}
+            `;
+          }
+        }
+      } else if (doc.content) {
+        // Fallback if retrieval service not available
         systemPrompt = `
 You are an academic assistant. 
 You must strictly use the following document content to answer user questions.

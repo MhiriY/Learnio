@@ -10,6 +10,7 @@ import { CreateDocumentDto } from './dto/create-document.dto.js';
 import { UpdateDocumentDto } from './dto/update-document.dto.js';
 import { DocumentResponseDto } from './dto/document-response.dto.js';
 import { ExtractTextResponseDto } from './dto/extract-text-response.dto.js';
+import { DocumentProcessingService } from './document-processing.service.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import pdf from 'pdf-parse-fixed';
@@ -19,7 +20,10 @@ export class DocumentsService {
   private readonly uploadsDir = path.join(process.cwd(), 'uploads');
   private readonly logger = new Logger(DocumentsService.name);
 
-  constructor(private prisma: PrismaService) {
+  constructor(
+    private prisma: PrismaService,
+    private documentProcessingService: DocumentProcessingService,
+  ) {
     // Ensure uploads directory exists
     if (!fs.existsSync(this.uploadsDir)) {
       fs.mkdirSync(this.uploadsDir, { recursive: true });
@@ -124,6 +128,8 @@ export class DocumentsService {
       const parsed = await pdf(fileBuffer);
       const extractedText = parsed.text;
 
+      // Note: fileBuffer and parsed will be garbage collected after this scope
+
       // Save extracted text into document.content and set status to READY
       const updatedDocument = await (this.prisma as any).document.update({
         where: { id: documentId },
@@ -133,6 +139,29 @@ export class DocumentsService {
         },
       });
 
+      // Automatically chunk and generate embeddings asynchronously (don't block response)
+      if (this.documentProcessingService) {
+        // Process in background without awaiting - use void to explicitly mark as fire-and-forget
+        void this.documentProcessingService
+          .processDocument(documentId)
+          .then(() => {
+            this.logger.log(
+              `Successfully processed chunks and embeddings for document ${documentId}`,
+            );
+          })
+          .catch((error) => {
+            this.logger.error(
+              `Failed to process document chunks: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            );
+            // Update status to indicate processing failed but extraction succeeded
+            void this.prisma.document.update({
+              where: { id: documentId },
+              data: { status: 'READY' }, // Keep as READY since extraction worked
+            });
+          });
+      }
+
+      // Return response (extractedText will be garbage collected after return)
       return {
         documentId: updatedDocument.id,
         content: extractedText,

@@ -104,7 +104,7 @@ enum MessageRole {
 
 
 // ===================================================================
-// DOCUMENT CHUNKS (future RAG)
+// DOCUMENT CHUNKS (RAG)
 // ===================================================================
 model DocumentChunk {
   id          String      @id @default(uuid())
@@ -113,7 +113,7 @@ model DocumentChunk {
 
   index       Int         // chunk order 0,1,2,3...
   content     String
-  // embedding  Bytes?     // Optional if storing vectors in Postgres
+  embedding   Json?       // Vector embedding stored as JSON array
 
   createdAt   DateTime    @default(now())
 }

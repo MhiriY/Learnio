@@ -1,7 +1,6 @@
 import {
   Controller,
   Get,
-  Post,
   Body,
   Param,
   Delete,
@@ -20,7 +19,10 @@ export class MessagesController {
   constructor(private readonly messagesService: MessagesService) {}
 
   @Get('conversation/:conversationId')
-  findAllByConversation(@Param('conversationId') conversationId: string, @Req() req: any) {
+  findAllByConversation(
+    @Param('conversationId') conversationId: string,
+    @Req() req: any,
+  ) {
     return this.messagesService.findAll(conversationId, req.user.id);
   }
 
@@ -34,4 +36,3 @@ export class MessagesController {
     return this.messagesService.remove(id, req.user.id);
   }
 }
-
