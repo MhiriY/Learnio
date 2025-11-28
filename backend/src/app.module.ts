@@ -9,6 +9,8 @@ import { DocumentsModule } from './documents/documents.module';
 import { DocumentChunksModule } from './document-chunks/document-chunks.module';
 import { QuestionsModule } from './questions/questions.module';
 import { AuthModule } from './auth/auth.module';
+import { ConversationsModule } from './conversations/conversations.module';
+import { MessagesModule } from './messages/messages.module';
 
 @Module({
   imports: [
@@ -23,7 +25,8 @@ import { AuthModule } from './auth/auth.module';
     DocumentsModule,
     DocumentChunksModule,
     QuestionsModule,
-    AuthModule,
+    ConversationsModule,
+    MessagesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

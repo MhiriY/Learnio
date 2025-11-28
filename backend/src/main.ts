@@ -6,13 +6,14 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
-  
+
   // Enable CORS for frontend communication
   app.enableCors({
-    origin: configService.get<string>('FRONTEND_URL') || 'http://localhost:5173',
+    origin:
+      configService.get<string>('FRONTEND_URL') || 'http://localhost:5173',
     credentials: true,
   });
-  
+
   // --- Swagger config ---
   const config = new DocumentBuilder()
     .setTitle('Learnio API')
@@ -24,7 +25,6 @@ async function bootstrap() {
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
-  
   const port = configService.get<number>('PORT') || 3000;
   await app.listen(port);
 }
