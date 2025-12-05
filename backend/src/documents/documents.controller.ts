@@ -14,7 +14,12 @@ import {
   UseGuards,
   Request,
   ForbiddenException,
+  Res,
+  NotFoundException,
+  Logger,
 } from '@nestjs/common';
+import * as fs from 'fs';
+import * as path from 'path';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
@@ -37,6 +42,8 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 @ApiTags('documents')
 @Controller('documents')
 export class DocumentsController {
+  private readonly logger = new Logger(DocumentsController.name);
+
   constructor(
     private readonly documentsService: DocumentsService,
     private readonly documentProcessingService: DocumentProcessingService,
@@ -158,6 +165,81 @@ export class DocumentsController {
   })
   async findAll(): Promise<DocumentResponseDto[]> {
     return this.documentsService.findAll();
+  }
+
+  @Get(':id/file')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get document file' })
+  @ApiResponse({
+    status: 200,
+    description: 'Document file',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Document not found',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Document does not belong to user',
+  })
+  async getFile(@Param('id') id: string, @Request() req: any, @Res() res: any) {
+    try {
+      // Verify document ownership
+      const document = await this.documentsService.findOne(id);
+
+      if (!document) {
+        this.logger.warn(`Document ${id} not found`);
+        throw new NotFoundException(`Document with ID ${id} not found`);
+      }
+
+      this.logger.log(
+        `Found document ${id}, userId: ${document.userId}, requesting userId: ${req.user.id}`,
+      );
+
+      if (document.userId !== req.user.id) {
+        this.logger.warn(
+          `User ${req.user.id} attempted to access document ${id} owned by ${document.userId}`,
+        );
+        throw new ForbiddenException('You do not have access to this document');
+      }
+
+      // Determine file path - handle both absolute and relative paths
+      let filePath: string;
+      if (path.isAbsolute(document.filePath)) {
+        // If filePath is already absolute, use it directly
+        filePath = document.filePath;
+      } else {
+        // If filePath is relative, join with process.cwd()
+        filePath = path.join(process.cwd(), document.filePath);
+      }
+
+      this.logger.log(`Attempting to serve file from path: ${filePath}`);
+      this.logger.log(`Document filePath in DB: ${document.filePath}`);
+      this.logger.log(`process.cwd(): ${process.cwd()}`);
+
+      if (!fs.existsSync(filePath)) {
+        this.logger.error(`File not found at path: ${filePath}`);
+        this.logger.error(`Document filePath in DB: ${document.filePath}`);
+        this.logger.error(`process.cwd(): ${process.cwd()}`);
+        throw new NotFoundException(`File not found at path: ${filePath}`);
+      }
+
+      this.logger.log(`Successfully serving file: ${filePath}`);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.sendFile(filePath);
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof ForbiddenException
+      ) {
+        throw error;
+      }
+      this.logger.error(
+        `Error serving file for document ${id}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      throw error;
+    }
   }
 
   @Get(':id')

@@ -73,19 +73,35 @@ export class DocumentsService {
     const uniqueFilename = `${Date.now()}-${Math.random().toString(36).substring(7)}${fileExtension}`;
     const filePath = path.join(this.uploadsDir, uniqueFilename);
 
+    this.logger.log(`Saving file to: ${filePath}`);
+    this.logger.log(`Uploads directory: ${this.uploadsDir}`);
+
     // Save file to disk
     fs.writeFileSync(filePath, file.buffer);
 
+    // Verify file was saved
+    if (!fs.existsSync(filePath)) {
+      this.logger.error(`Failed to save file to ${filePath}`);
+      throw new InternalServerErrorException('Failed to save file to disk');
+    }
+
+    this.logger.log(`File saved successfully to: ${filePath}`);
+
     // Save document metadata to database
+    // Store absolute path in database for reliability
     const document = await (this.prisma as any).document.create({
       data: {
         userId,
         courseId: courseId || null,
         originalFilename: file.originalname,
         mimeType: file.mimetype,
-        filePath: filePath,
+        filePath: filePath, // Store absolute path
       },
     });
+
+    this.logger.log(
+      `Document created with ID: ${document.id}, filePath: ${document.filePath}`,
+    );
 
     // Automatically extract text for PDFs so doc chat works immediately.
     if (document.mimeType === 'application/pdf') {
@@ -238,8 +254,13 @@ export class DocumentsService {
     });
 
     if (!document) {
+      this.logger.warn(`Document with ID ${id} not found in database`);
       throw new NotFoundException(`Document with ID ${id} not found`);
     }
+
+    this.logger.log(
+      `Found document ${id}: filePath=${document.filePath}, userId=${document.userId}`,
+    );
 
     return {
       id: document.id,

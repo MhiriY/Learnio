@@ -20,6 +20,12 @@ interface DocumentContext {
     documentId?: string;
     documentFilename?: string;
   }>;
+  chunks?: Array<{
+    documentId: string;
+    documentName: string;
+    chunkIndex: number;
+    content: string;
+  }>;
 }
 
 interface ConversationData {
@@ -167,10 +173,14 @@ export class AgentService {
       assistantResponse,
     );
 
-    // 8. Return response
+    // 8. Extract sources from document context
+    const sources = documentContext?.chunks || [];
+
+    // 9. Return response
     return {
       conversationId: conversation.id,
       answer: assistantResponse,
+      sources,
     };
   }
 
@@ -220,15 +230,18 @@ export class AgentService {
       prompt,
     );
 
-    // 6. Send conversation ID first
+    // 6. Extract sources from document context
+    const sources = documentContext?.chunks || [];
+
+    // 7. Send conversation ID first
     res.write(
       `data: ${JSON.stringify({ conversationId: conversation.id })}\n\n`,
     );
 
-    // 7. Call OpenAI with streaming
+    // 8. Call OpenAI with streaming
     const fullResponse = await this.sendOpenAIStreaming(messages, res);
 
-    // 8. Store assistant message
+    // 9. Store assistant message
     if (fullResponse) {
       await this.messagesService.create(
         conversation.id as string,
@@ -238,7 +251,10 @@ export class AgentService {
       );
     }
 
-    // 9. Send done signal
+    // 10. Send sources
+    res.write(`data: ${JSON.stringify({ sources })}\n\n`);
+
+    // 11. Send done signal
     res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
     res.end();
   }
@@ -282,6 +298,12 @@ export class AgentService {
           return {
             context: contextChunks.join('\n\n---\n\n'),
             source: 'rag',
+            chunks: relevantChunks.map((chunk) => ({
+              documentId: documentId,
+              documentName: doc.originalFilename || 'Untitled',
+              chunkIndex: chunk.index,
+              content: chunk.content,
+            })),
           };
         } else if (doc.content) {
           // Fallback to full content if no chunks found
@@ -385,6 +407,12 @@ export class AgentService {
             metadata: relevantChunks.map((chunk) => ({
               documentId: chunk.documentId,
               documentFilename: chunk.documentFilename,
+            })),
+            chunks: relevantChunks.map((chunk) => ({
+              documentId: chunk.documentId || '',
+              documentName: chunk.documentFilename || 'Untitled',
+              chunkIndex: chunk.index,
+              content: chunk.content,
             })),
           };
         }
