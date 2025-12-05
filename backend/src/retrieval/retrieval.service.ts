@@ -7,6 +7,8 @@ interface ChunkWithSimilarity {
   content: string;
   index: number;
   similarity: number;
+  documentId?: string;
+  documentFilename?: string;
 }
 
 @Injectable()
@@ -178,5 +180,154 @@ export class RetrievalService {
     }
 
     return dotProduct / denominator;
+  }
+
+  /**
+   * Retrieve top-K most relevant chunks across all documents in a course
+   * @param courseId - The course to search in
+   * @param userQuery - The user's query/question
+   * @param topK - Number of top chunks to return (default: 5)
+   * @returns Array of chunks sorted by relevance (highest similarity first), with document metadata
+   */
+  async retrieveRelevantChunksForCourse(
+    courseId: string,
+    userQuery: string,
+    topK: number = 5,
+  ): Promise<ChunkWithSimilarity[]> {
+    const startMemory = this.getMemoryUsage();
+    this.logger.log(
+      `[Memory: ${startMemory}MB] Retrieving chunks for course: ${courseId}, query: "${userQuery.substring(0, 50)}..."`,
+    );
+
+    // Verify course exists
+    const course = await (this.prisma as any).course.findUnique({
+      where: { id: courseId },
+      select: { id: true },
+    });
+
+    if (!course) {
+      throw new NotFoundException(`Course with ID ${courseId} not found`);
+    }
+
+    // Get all documents in the course
+    const documents = await this.prisma.document.findMany({
+      where: {
+        courseId: courseId as any,
+      },
+      select: {
+        id: true,
+        originalFilename: true,
+      },
+    });
+
+    if (documents.length === 0) {
+      this.logger.warn(`No documents found for course ${courseId}`);
+      return [];
+    }
+
+    this.logger.log(
+      `[Memory: ${this.getMemoryUsage()}MB] Found ${documents.length} documents in course`,
+    );
+
+    // Get total chunk count across all documents
+    const allChunksCount = await this.prisma.documentChunk.count({
+      where: {
+        documentId: {
+          in: documents.map((d) => d.id),
+        },
+      },
+    });
+
+    if (allChunksCount === 0) {
+      this.logger.warn(`No chunks found for course ${courseId}`);
+      return [];
+    }
+
+    this.logger.log(
+      `[Memory: ${this.getMemoryUsage()}MB] Found ${allChunksCount} total chunks across all documents`,
+    );
+
+    // Safety check: don't process too many chunks
+    const chunksToProcess = Math.min(allChunksCount, this.maxChunksToLoad);
+    if (allChunksCount > this.maxChunksToLoad) {
+      this.logger.warn(
+        `Course has ${allChunksCount} chunks (exceeds limit of ${this.maxChunksToLoad}). Processing first ${this.maxChunksToLoad} chunks only.`,
+      );
+    }
+
+    // Generate embedding for the query ONCE
+    const queryEmbedding =
+      await this.embeddingsService.generateEmbedding(userQuery);
+
+    this.logger.log(
+      `[Memory: ${this.getMemoryUsage()}MB] Generated query embedding (${queryEmbedding.length} dimensions)`,
+    );
+
+    // Create a map of documentId to filename for quick lookup
+    const documentMap = new Map(
+      documents.map((d) => [d.id, d.originalFilename || 'Untitled']),
+    );
+
+    // Process chunks in batches to avoid loading all into memory
+    const batchSize = 20;
+    const allSimilarities: ChunkWithSimilarity[] = [];
+
+    for (let offset = 0; offset < chunksToProcess; offset += batchSize) {
+      const batch = await this.prisma.documentChunk.findMany({
+        where: {
+          documentId: {
+            in: documents.map((d) => d.id) as any,
+          },
+        },
+        select: {
+          id: true,
+          content: true,
+          index: true,
+          embedding: true,
+          documentId: true,
+        },
+        orderBy: { index: 'asc' },
+        skip: offset,
+        take: batchSize,
+      });
+
+      // Calculate similarity for this batch
+      for (const chunk of batch) {
+        const chunkEmbedding = chunk.embedding as number[] | null;
+        if (!chunkEmbedding || !Array.isArray(chunkEmbedding)) {
+          continue;
+        }
+
+        const similarity = this.cosineSimilarity(
+          queryEmbedding,
+          chunkEmbedding,
+        );
+
+        allSimilarities.push({
+          id: chunk.id,
+          content: chunk.content,
+          index: chunk.index,
+          similarity,
+          documentId: chunk.documentId,
+          documentFilename: documentMap.get(chunk.documentId) || 'Untitled',
+        });
+      }
+
+      this.logger.debug(
+        `[Memory: ${this.getMemoryUsage()}MB] Processed batch ${Math.floor(offset / batchSize) + 1}, ${allSimilarities.length} similarities calculated`,
+      );
+    }
+
+    // Sort and return top K
+    const topChunks = allSimilarities
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, topK);
+
+    const endMemory = this.getMemoryUsage();
+    this.logger.log(
+      `[Memory: ${endMemory}MB] Retrieved ${topChunks.length} relevant chunks from course. Memory delta: ${endMemory - startMemory}MB`,
+    );
+
+    return topChunks;
   }
 }

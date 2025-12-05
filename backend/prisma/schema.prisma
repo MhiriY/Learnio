@@ -27,6 +27,7 @@ model User {
   documents     Document[]
   conversations Conversation[]
   questions     Question[]
+  courses       Course[]
 }
 
 
@@ -37,6 +38,9 @@ model Document {
   id               String          @id @default(uuid())
   userId           String
   user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  courseId         String?
+  course           Course?         @relation(fields: [courseId], references: [id], onDelete: SetNull)
 
   originalFilename String?
   mimeType         String?
@@ -73,6 +77,9 @@ model Conversation {
   title       String?
   documentId  String?
   document    Document?     @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  courseId    String?
+  course      Course?       @relation(fields: [courseId], references: [id], onDelete: SetNull)
 
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
@@ -134,4 +141,23 @@ model Question {
   question    String
   answer      String?
   createdAt   DateTime    @default(now())
+}
+
+
+// ===================================================================
+// COURSES
+// ===================================================================
+model Course {
+  id           String        @id @default(uuid())
+  userId       String
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title        String
+  description  String?
+
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  documents    Document[]
+  conversations Conversation[]
 }

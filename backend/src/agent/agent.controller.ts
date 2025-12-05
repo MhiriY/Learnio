@@ -38,6 +38,7 @@ export class AgentController {
       req.user.id,
       dto.prompt,
       dto.conversationId,
+      dto.courseId,
       dto.documentId,
     );
   }
@@ -59,6 +60,7 @@ export class AgentController {
         req.user.id,
         dto.prompt,
         dto.conversationId,
+        dto.courseId,
         dto.documentId,
         res,
       );

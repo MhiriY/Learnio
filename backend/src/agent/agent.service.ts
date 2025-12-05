@@ -11,10 +11,15 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ConversationsService } from '../conversations/conversations.service';
 import { MessagesService } from '../messages/messages.service';
 import { RetrievalService } from '../retrieval/retrieval.service';
+import { CoursesService } from '../courses/courses.service';
 
 interface DocumentContext {
   context: string;
-  source: 'rag' | 'full';
+  source: 'rag' | 'full' | 'course-rag';
+  metadata?: Array<{
+    documentId?: string;
+    documentFilename?: string;
+  }>;
 }
 
 interface ConversationData {
@@ -41,6 +46,7 @@ export class AgentService {
     private readonly conversationsService: ConversationsService,
     private readonly messagesService: MessagesService,
     private readonly retrievalService?: RetrievalService,
+    private readonly coursesService?: CoursesService,
   ) {
     const apiKey = this.configService.get<string>('OPENAI_API_KEY');
     if (!apiKey) {
@@ -105,14 +111,20 @@ export class AgentService {
     userId: string,
     prompt: string,
     conversationId?: string,
+    courseId?: string,
     documentId?: string,
   ) {
-    // 1. Get document context
+    // 1. Validate course and document ownership
+    await this.validateCourseAndDocument(userId, courseId, documentId);
+
+    // 2. Get document/course context
     const documentContext = documentId
       ? await this.getDocumentContext(documentId, userId, prompt)
-      : null;
+      : courseId
+        ? await this.getCourseContext(courseId, userId, prompt)
+        : null;
 
-    // 2. Build system prompt
+    // 3. Build system prompt
     const systemPrompt = documentContext
       ? this.generateSystemPrompt(
           documentContext.context,
@@ -120,11 +132,12 @@ export class AgentService {
         )
       : 'You are a helpful AI assistant.';
 
-    // 3. Load or create conversation and get message history
+    // 4. Load or create conversation and get message history
     const { conversation, history } = await this.loadConversationOrCreateNew(
       userId,
       prompt,
       conversationId,
+      courseId,
       documentId,
     );
 
@@ -165,15 +178,21 @@ export class AgentService {
     userId: string,
     prompt: string,
     conversationId: string | undefined,
+    courseId: string | undefined,
     documentId: string | undefined,
     res: Response,
   ) {
-    // 1. Get document context
+    // 1. Validate course and document ownership
+    await this.validateCourseAndDocument(userId, courseId, documentId);
+
+    // 2. Get document/course context
     const documentContext = documentId
       ? await this.getDocumentContext(documentId, userId, prompt)
-      : null;
+      : courseId
+        ? await this.getCourseContext(courseId, userId, prompt)
+        : null;
 
-    // 2. Build system prompt
+    // 3. Build system prompt
     const systemPrompt = documentContext
       ? this.generateSystemPrompt(
           documentContext.context,
@@ -181,11 +200,12 @@ export class AgentService {
         )
       : 'You are a helpful AI assistant.';
 
-    // 3. Load or create conversation and get message history
+    // 4. Load or create conversation and get message history
     const { conversation, history } = await this.loadConversationOrCreateNew(
       userId,
       prompt,
       conversationId,
+      courseId,
       documentId,
     );
 
@@ -294,13 +314,149 @@ export class AgentService {
   }
 
   /**
+   * Validate course and document ownership and relationship
+   */
+  private async validateCourseAndDocument(
+    userId: string,
+    courseId?: string,
+    documentId?: string,
+  ): Promise<void> {
+    // If courseId is provided, validate ownership
+    if (courseId && this.coursesService) {
+      await this.coursesService.findOne(courseId, userId);
+    }
+
+    // If both courseId and documentId are provided, verify document belongs to course
+    if (courseId && documentId) {
+      const doc = await this.prisma.document.findUnique({
+        where: { id: documentId },
+        select: { id: true, userId: true, courseId: true as any },
+      });
+
+      if (!doc) {
+        throw new NotFoundException('Document not found');
+      }
+
+      if (doc.userId !== userId) {
+        throw new ForbiddenException('You do not have access to this document');
+      }
+
+      if ((doc as any).courseId !== courseId) {
+        throw new ForbiddenException(
+          'Document does not belong to the specified course',
+        );
+      }
+    }
+  }
+
+  /**
+   * Get course context with RAG retrieval across all documents in the course
+   */
+  private async getCourseContext(
+    courseId: string,
+    userId: string,
+    userPrompt: string,
+  ): Promise<DocumentContext | null> {
+    // Verify course ownership
+    if (this.coursesService) {
+      await this.coursesService.findOne(courseId, userId);
+    }
+
+    // Use RAG retrieval if available
+    if (this.retrievalService) {
+      try {
+        const relevantChunks =
+          await this.retrievalService.retrieveRelevantChunksForCourse(
+            courseId,
+            userPrompt,
+            10, // top-K for course (more chunks since multiple documents)
+          );
+
+        if (relevantChunks.length > 0) {
+          // Format chunks with document identifiers
+          const contextChunks = relevantChunks.map(
+            (chunk) =>
+              `[Doc: ${chunk.documentFilename || 'Untitled'} | Chunk ${chunk.index}]: ${chunk.content}`,
+          );
+
+          return {
+            context: contextChunks.join('\n\n---\n\n'),
+            source: 'course-rag',
+            metadata: relevantChunks.map((chunk) => ({
+              documentId: chunk.documentId,
+              documentFilename: chunk.documentFilename,
+            })),
+          };
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Course RAG retrieval failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        );
+      }
+    }
+
+    // Fallback: get all documents in course and use their content
+    const documents = await this.prisma.document.findMany({
+      where: {
+        courseId: courseId as any,
+        userId, // Ensure documents belong to user
+      },
+      select: {
+        id: true,
+        originalFilename: true,
+        content: true,
+      },
+    });
+
+    if (documents.length === 0) {
+      return null;
+    }
+
+    // Concatenate document contents (limit to avoid token overflow)
+    const maxContentLength = 10000; // Approximate limit
+    let totalContent = '';
+    const usedDocuments: Array<{ documentId?: string; documentFilename?: string }> = [];
+
+    for (const doc of documents) {
+      if (doc.content && totalContent.length < maxContentLength) {
+        const remaining = maxContentLength - totalContent.length;
+        const contentToAdd = doc.content.substring(0, remaining);
+        totalContent += `[Document: ${doc.originalFilename || 'Untitled'}]\n${contentToAdd}\n\n`;
+        usedDocuments.push({
+          documentId: doc.id,
+          documentFilename: doc.originalFilename || undefined,
+        });
+      }
+    }
+
+    if (totalContent) {
+      return {
+        context: totalContent,
+        source: 'full',
+        metadata: usedDocuments,
+      };
+    }
+
+    return null;
+  }
+
+  /**
    * Generate system prompt based on context and source type
    */
   private generateSystemPrompt(
     context: string,
-    source: 'rag' | 'full',
+    source: 'rag' | 'full' | 'course-rag',
   ): string {
-    if (source === 'rag') {
+    if (source === 'course-rag') {
+      return `
+You are an academic assistant. 
+You must strictly use the following retrieved context from the course documents to answer user questions.
+If something is not in the provided context, say "The information is not available in the provided course materials."
+
+Retrieved Context from Course:
+${context}
+      `;
+    } else if (source === 'rag') {
       return `
 You are an academic assistant. 
 You must strictly use the following retrieved context from the document to answer user questions.
@@ -329,6 +485,7 @@ ${context}
     userId: string,
     prompt: string,
     conversationId?: string,
+    courseId?: string,
     documentId?: string,
   ): Promise<ConversationData> {
     let conversation;
@@ -341,6 +498,20 @@ ${context}
         userId,
       );
 
+      // Verify conversation belongs to the correct course if courseId is provided
+      if (courseId && conversation.courseId !== courseId) {
+        throw new ForbiddenException(
+          'Conversation does not belong to the specified course',
+        );
+      }
+
+      // Verify conversation belongs to the correct document if documentId is provided
+      if (documentId && conversation.documentId !== documentId) {
+        throw new ForbiddenException(
+          'Conversation does not belong to the specified document',
+        );
+      }
+
       // Load message history
       history = await this.buildMessageHistory(conversationId, userId);
     } else {
@@ -349,6 +520,7 @@ ${context}
         prompt.length > 50 ? prompt.substring(0, 50) + '...' : prompt;
       conversation = await this.conversationsService.create(
         userId,
+        courseId,
         documentId,
         title,
       );

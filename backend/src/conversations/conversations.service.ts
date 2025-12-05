@@ -9,10 +9,16 @@ import { PrismaService } from '../prisma/prisma.service';
 export class ConversationsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(userId: string, documentId?: string, title?: string) {
+  async create(
+    userId: string,
+    courseId?: string,
+    documentId?: string,
+    title?: string,
+  ) {
     return this.prisma.conversation.create({
       data: {
         userId,
+        courseId: (courseId || null) as any,
         documentId: documentId || null,
         title: title || null,
       },
@@ -28,6 +34,12 @@ export class ConversationsService {
           select: {
             id: true,
             originalFilename: true,
+          },
+        },
+        course: {
+          select: {
+            id: true,
+            title: true,
           },
         },
         _count: {
@@ -47,6 +59,12 @@ export class ConversationsService {
           select: {
             id: true,
             originalFilename: true,
+          },
+        },
+        course: {
+          select: {
+            id: true,
+            title: true,
           },
         },
       },

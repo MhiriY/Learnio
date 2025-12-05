@@ -5,9 +5,16 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { ConversationsModule } from '../conversations/conversations.module';
 import { MessagesModule } from '../messages/messages.module';
 import { RetrievalModule } from '../retrieval/retrieval.module';
+import { CoursesModule } from '../courses/courses.module';
 
 @Module({
-  imports: [PrismaModule, ConversationsModule, MessagesModule, RetrievalModule],
+  imports: [
+    PrismaModule,
+    ConversationsModule,
+    MessagesModule,
+    RetrievalModule,
+    CoursesModule,
+  ],
   controllers: [AgentController],
   providers: [AgentService],
 })

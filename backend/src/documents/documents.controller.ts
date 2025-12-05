@@ -8,6 +8,7 @@ import {
   UploadedFile,
   Body,
   Param,
+  Query,
   HttpCode,
   HttpStatus,
   UseGuards,
@@ -22,6 +23,7 @@ import {
   ApiConsumes,
   ApiBody,
   ApiBearerAuth,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { DocumentsService } from './documents.service.js';
 import { DocumentProcessingService } from './document-processing.service.js';
@@ -49,7 +51,17 @@ export class DocumentsController {
       fileFilter: fileFilter,
     }),
   )
-  @ApiOperation({ summary: 'Upload a PDF or PPTX document' })
+  @ApiOperation({
+    summary: 'Upload a PDF or PPTX document',
+    description:
+      'Upload a document. Optionally specify courseId as a query parameter to assign the document to a course.',
+  })
+  @ApiQuery({
+    name: 'courseId',
+    required: false,
+    type: String,
+    description: 'Optional course ID to assign the document to. Must belong to the authenticated user.',
+  })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
@@ -63,6 +75,14 @@ export class DocumentsController {
       },
       required: ['file'],
     },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Course does not belong to user',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Course not found',
   })
   @ApiResponse({
     status: 201,
@@ -80,10 +100,11 @@ export class DocumentsController {
   async upload(
     @UploadedFile() file: any,
     @Request() req: any,
+    @Query('courseId') courseId?: string,
   ): Promise<DocumentResponseDto> {
     // Get user ID from JWT token (set by JwtStrategy)
     const userId = req.user.id;
-    return this.documentsService.uploadFile(file, userId);
+    return this.documentsService.uploadFile(file, userId, courseId);
   }
 
   @Post(':id/extract')

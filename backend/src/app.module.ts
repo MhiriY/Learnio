@@ -11,7 +11,7 @@ import { QuestionsModule } from './questions/questions.module';
 import { AuthModule } from './auth/auth.module';
 import { ConversationsModule } from './conversations/conversations.module';
 import { MessagesModule } from './messages/messages.module';
-
+import { CoursesModule } from './courses/courses.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -27,6 +27,7 @@ import { MessagesModule } from './messages/messages.module';
     QuestionsModule,
     ConversationsModule,
     MessagesModule,
+    CoursesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

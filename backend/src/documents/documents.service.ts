@@ -4,6 +4,7 @@ import {
   NotFoundException,
   InternalServerErrorException,
   Logger,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateDocumentDto } from './dto/create-document.dto.js';
@@ -11,6 +12,7 @@ import { UpdateDocumentDto } from './dto/update-document.dto.js';
 import { DocumentResponseDto } from './dto/document-response.dto.js';
 import { ExtractTextResponseDto } from './dto/extract-text-response.dto.js';
 import { DocumentProcessingService } from './document-processing.service.js';
+import { CoursesService } from '../courses/courses.service.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import pdf from 'pdf-parse-fixed';
@@ -23,6 +25,7 @@ export class DocumentsService {
   constructor(
     private prisma: PrismaService,
     private documentProcessingService: DocumentProcessingService,
+    private coursesService: CoursesService,
   ) {
     // Ensure uploads directory exists
     if (!fs.existsSync(this.uploadsDir)) {
@@ -30,7 +33,11 @@ export class DocumentsService {
     }
   }
 
-  async uploadFile(file: any, userId: string): Promise<DocumentResponseDto> {
+  async uploadFile(
+    file: any,
+    userId: string,
+    courseId?: string,
+  ): Promise<DocumentResponseDto> {
     if (!file) {
       throw new BadRequestException('No file provided');
     }
@@ -46,6 +53,21 @@ export class DocumentsService {
       throw new BadRequestException(`User with ID ${userId} does not exist`);
     }
 
+    // Validate course ownership if courseId is provided
+    if (courseId) {
+      try {
+        await this.coursesService.findOne(courseId, userId);
+      } catch (error) {
+        if (error instanceof NotFoundException) {
+          throw new NotFoundException(`Course with ID ${courseId} not found`);
+        }
+        if (error instanceof ForbiddenException) {
+          throw new ForbiddenException('You do not have access to this course');
+        }
+        throw error;
+      }
+    }
+
     // Generate unique filename
     const fileExtension = path.extname(file.originalname);
     const uniqueFilename = `${Date.now()}-${Math.random().toString(36).substring(7)}${fileExtension}`;
@@ -58,6 +80,7 @@ export class DocumentsService {
     const document = await (this.prisma as any).document.create({
       data: {
         userId,
+        courseId: courseId || null,
         originalFilename: file.originalname,
         mimeType: file.mimetype,
         filePath: filePath,
