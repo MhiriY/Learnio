@@ -12,6 +12,24 @@ import { ConversationsService } from '../conversations/conversations.service';
 import { MessagesService } from '../messages/messages.service';
 import { RetrievalService } from '../retrieval/retrieval.service';
 
+interface DocumentContext {
+  context: string;
+  source: 'rag' | 'full';
+}
+
+interface ConversationData {
+  conversation: any;
+  history: Array<{
+    role: 'system' | 'user' | 'assistant';
+    content: string;
+  }>;
+}
+
+type OpenAIMessage = {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+};
+
 @Injectable()
 export class AgentService {
   private readonly logger = new Logger(AgentService.name);
@@ -46,7 +64,7 @@ export class AgentService {
   }
 
   async docChat(documentId: string, userPrompt: string) {
-    // 1. Fetch the document from the database
+    // Get document context (without userId check for docChat - legacy behavior)
     const doc = await this.prisma.document.findUnique({
       where: { id: documentId },
     });
@@ -61,26 +79,21 @@ export class AgentService {
       );
     }
 
-    // 2. Build the context-aware prompt
-    const systemPrompt = `
-You are an academic assistant. 
-You must strictly use the following document content to answer user questions.
-If something is not in the document, say "The information is not available in the provided document."
+    // Use full content for docChat (legacy behavior)
+    const context: DocumentContext = {
+      context: doc.content,
+      source: 'full',
+    };
 
-Document Content:
-${doc.content}
-  `;
+    const systemPrompt = this.generateSystemPrompt(
+      context.context,
+      context.source,
+    );
 
-    // 3. Call the OpenAI agent
-    const completion = await this.client.chat.completions.create({
-      model: this.model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-    });
-
-    const answer = completion.choices[0].message.content;
+    const answer = await this.sendOpenAICompletion([
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ]);
 
     return {
       documentId,
@@ -94,151 +107,54 @@ ${doc.content}
     conversationId?: string,
     documentId?: string,
   ) {
-    let conversation;
-    let messages: Array<{
-      role: 'system' | 'user' | 'assistant';
-      content: string;
-    }> = [];
+    // 1. Get document context
+    const documentContext = documentId
+      ? await this.getDocumentContext(documentId, userId, prompt)
+      : null;
 
-    // Build system prompt
-    let systemPrompt = 'You are a helpful AI assistant.';
-    let contextChunks: string[] = [];
+    // 2. Build system prompt
+    const systemPrompt = documentContext
+      ? this.generateSystemPrompt(
+          documentContext.context,
+          documentContext.source,
+        )
+      : 'You are a helpful AI assistant.';
 
-    if (documentId) {
-      const doc = await this.prisma.document.findUnique({
-        where: { id: documentId },
-      });
+    // 3. Load or create conversation and get message history
+    const { conversation, history } = await this.loadConversationOrCreateNew(
+      userId,
+      prompt,
+      conversationId,
+      documentId,
+    );
 
-      if (!doc) {
-        throw new NotFoundException('Document not found');
-      }
+    // 4. Build OpenAI messages
+    const messages = this.buildOpenAIMessages(systemPrompt, history, prompt);
 
-      // Verify document ownership
-      if (doc.userId !== userId) {
-        throw new ForbiddenException('You do not have access to this document');
-      }
+    // 5. Store user message
+    await this.messagesService.create(
+      conversation.id as string,
+      userId,
+      'USER',
+      prompt,
+    );
 
-      // Use RAG retrieval if available, otherwise fall back to full content
-      if (this.retrievalService) {
-        try {
-          const relevantChunks =
-            await this.retrievalService.retrieveRelevantChunks(
-              documentId,
-              prompt,
-              5, // top-K
-            );
-
-          if (relevantChunks.length > 0) {
-            contextChunks = relevantChunks.map(
-              (chunk) => `[Chunk ${chunk.index}]: ${chunk.content}`,
-            );
-            systemPrompt = `
-You are an academic assistant. 
-You must strictly use the following retrieved context from the document to answer user questions.
-If something is not in the provided context, say "The information is not available in the provided document."
-
-Retrieved Context:
-${contextChunks.join('\n\n---\n\n')}
-            `;
-          } else if (doc.content) {
-            // Fallback to full content if no chunks found
-            systemPrompt = `
-You are an academic assistant. 
-You must strictly use the following document content to answer user questions.
-If something is not in the document, say "The information is not available in the provided document."
-
-Document Content:
-${doc.content}
-            `;
-          }
-        } catch (error) {
-          this.logger.warn(
-            `RAG retrieval failed, falling back to full content: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          );
-          // Fallback to full content on error
-          if (doc.content) {
-            systemPrompt = `
-You are an academic assistant. 
-You must strictly use the following document content to answer user questions.
-If something is not in the document, say "The information is not available in the provided document."
-
-Document Content:
-${doc.content}
-            `;
-          }
-        }
-      } else if (doc.content) {
-        // Fallback if retrieval service not available
-        systemPrompt = `
-You are an academic assistant. 
-You must strictly use the following document content to answer user questions.
-If something is not in the document, say "The information is not available in the provided document."
-
-Document Content:
-${doc.content}
-        `;
-      }
-    }
-
-    // Handle conversation
-    if (conversationId) {
-      // Load existing conversation and verify ownership
-      conversation = await this.conversationsService.findOne(
-        conversationId,
-        userId,
-      );
-
-      // Load message history
-      const messageHistory = await this.messagesService.findAll(
-        conversationId,
-        userId,
-      );
-
-      // Convert to OpenAI format
-      messages = messageHistory.map((msg) => ({
-        role: msg.role.toLowerCase() as 'user' | 'assistant' | 'system',
-        content: msg.content,
-      }));
-    } else {
-      // Create new conversation
-      const title =
-        prompt.length > 50 ? prompt.substring(0, 50) + '...' : prompt;
-      conversation = await this.conversationsService.create(
-        userId,
-        documentId,
-        title,
-      );
-    }
-
-    // Add system prompt at the beginning
-    messages.unshift({ role: 'system', content: systemPrompt });
-
-    // Add current user message
-    messages.push({ role: 'user', content: prompt });
-
-    // Store user message
-    await this.messagesService.create(conversation.id, userId, 'USER', prompt);
-
-    // Call OpenAI
-    const completion = await this.client.chat.completions.create({
-      model: this.model,
-      messages: messages as any,
-    });
-
-    const assistantResponse = completion.choices[0].message.content;
+    // 6. Call OpenAI
+    const assistantResponse = await this.sendOpenAICompletion(messages);
 
     if (!assistantResponse) {
       throw new Error('No response from AI model');
     }
 
-    // Store assistant message
+    // 7. Store assistant message
     await this.messagesService.create(
-      conversation.id,
+      conversation.id as string,
       userId,
       'ASSISTANT',
       assistantResponse,
     );
 
+    // 8. Return response
     return {
       conversationId: conversation.id,
       answer: assistantResponse,
@@ -252,108 +168,183 @@ ${doc.content}
     documentId: string | undefined,
     res: Response,
   ) {
-    let conversation;
-    let messages: Array<{
-      role: 'system' | 'user' | 'assistant';
-      content: string;
-    }> = [];
+    // 1. Get document context
+    const documentContext = documentId
+      ? await this.getDocumentContext(documentId, userId, prompt)
+      : null;
 
-    // Build system prompt
-    let systemPrompt = 'You are a helpful AI assistant.';
-    let contextChunks: string[] = [];
+    // 2. Build system prompt
+    const systemPrompt = documentContext
+      ? this.generateSystemPrompt(
+          documentContext.context,
+          documentContext.source,
+        )
+      : 'You are a helpful AI assistant.';
 
-    if (documentId) {
-      const doc = await this.prisma.document.findUnique({
-        where: { id: documentId },
-      });
+    // 3. Load or create conversation and get message history
+    const { conversation, history } = await this.loadConversationOrCreateNew(
+      userId,
+      prompt,
+      conversationId,
+      documentId,
+    );
 
-      if (!doc) {
-        throw new NotFoundException('Document not found');
+    // 4. Build OpenAI messages
+    const messages = this.buildOpenAIMessages(systemPrompt, history, prompt);
+
+    // 5. Store user message
+    await this.messagesService.create(
+      conversation.id as string,
+      userId,
+      'USER',
+      prompt,
+    );
+
+    // 6. Send conversation ID first
+    res.write(
+      `data: ${JSON.stringify({ conversationId: conversation.id })}\n\n`,
+    );
+
+    // 7. Call OpenAI with streaming
+    const fullResponse = await this.sendOpenAIStreaming(messages, res);
+
+    // 8. Store assistant message
+    if (fullResponse) {
+      await this.messagesService.create(
+        conversation.id as string,
+        userId,
+        'ASSISTANT',
+        fullResponse,
+      );
+    }
+
+    // 9. Send done signal
+    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+    res.end();
+  }
+
+  /**
+   * Get document context with RAG retrieval or fallback to full content
+   * Handles document loading, ownership validation, and context retrieval
+   */
+  private async getDocumentContext(
+    documentId: string,
+    userId: string,
+    userPrompt: string,
+  ): Promise<DocumentContext | null> {
+    const doc = await this.prisma.document.findUnique({
+      where: { id: documentId },
+    });
+
+    if (!doc) {
+      throw new NotFoundException('Document not found');
+    }
+
+    // Verify document ownership
+    if (doc.userId !== userId) {
+      throw new ForbiddenException('You do not have access to this document');
+    }
+
+    // Use RAG retrieval if available, otherwise fall back to full content
+    if (this.retrievalService) {
+      try {
+        const relevantChunks =
+          await this.retrievalService.retrieveRelevantChunks(
+            documentId,
+            userPrompt,
+            5, // top-K
+          );
+
+        if (relevantChunks.length > 0) {
+          const contextChunks = relevantChunks.map(
+            (chunk) => `[Chunk ${chunk.index}]: ${chunk.content}`,
+          );
+          return {
+            context: contextChunks.join('\n\n---\n\n'),
+            source: 'rag',
+          };
+        } else if (doc.content) {
+          // Fallback to full content if no chunks found
+          return {
+            context: doc.content,
+            source: 'full',
+          };
+        }
+      } catch (error) {
+        this.logger.warn(
+          `RAG retrieval failed, falling back to full content: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        );
+        // Fallback to full content on error
+        if (doc.content) {
+          return {
+            context: doc.content,
+            source: 'full',
+          };
+        }
       }
+    } else if (doc.content) {
+      // Fallback if retrieval service not available
+      return {
+        context: doc.content,
+        source: 'full',
+      };
+    }
 
-      if (doc.userId !== userId) {
-        throw new ForbiddenException('You do not have access to this document');
-      }
+    return null;
+  }
 
-      // Use RAG retrieval if available, otherwise fall back to full content
-      if (this.retrievalService) {
-        try {
-          const relevantChunks =
-            await this.retrievalService.retrieveRelevantChunks(
-              documentId,
-              prompt,
-              5, // top-K
-            );
-
-          if (relevantChunks.length > 0) {
-            contextChunks = relevantChunks.map(
-              (chunk) => `[Chunk ${chunk.index}]: ${chunk.content}`,
-            );
-            systemPrompt = `
+  /**
+   * Generate system prompt based on context and source type
+   */
+  private generateSystemPrompt(
+    context: string,
+    source: 'rag' | 'full',
+  ): string {
+    if (source === 'rag') {
+      return `
 You are an academic assistant. 
 You must strictly use the following retrieved context from the document to answer user questions.
 If something is not in the provided context, say "The information is not available in the provided document."
 
 Retrieved Context:
-${contextChunks.join('\n\n---\n\n')}
-            `;
-          } else if (doc.content) {
-            // Fallback to full content if no chunks found
-            systemPrompt = `
+${context}
+      `;
+    } else {
+      return `
 You are an academic assistant. 
 You must strictly use the following document content to answer user questions.
 If something is not in the document, say "The information is not available in the provided document."
 
 Document Content:
-${doc.content}
-            `;
-          }
-        } catch (error) {
-          this.logger.warn(
-            `RAG retrieval failed, falling back to full content: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          );
-          // Fallback to full content on error
-          if (doc.content) {
-            systemPrompt = `
-You are an academic assistant. 
-You must strictly use the following document content to answer user questions.
-If something is not in the document, say "The information is not available in the provided document."
-
-Document Content:
-${doc.content}
-            `;
-          }
-        }
-      } else if (doc.content) {
-        // Fallback if retrieval service not available
-        systemPrompt = `
-You are an academic assistant. 
-You must strictly use the following document content to answer user questions.
-If something is not in the document, say "The information is not available in the provided document."
-
-Document Content:
-${doc.content}
-        `;
-      }
+${context}
+      `;
     }
+  }
 
-    // Handle conversation
+  /**
+   * Load existing conversation or create a new one
+   * Returns conversation and message history
+   */
+  private async loadConversationOrCreateNew(
+    userId: string,
+    prompt: string,
+    conversationId?: string,
+    documentId?: string,
+  ): Promise<ConversationData> {
+    let conversation;
+    let history: OpenAIMessage[] = [];
+
     if (conversationId) {
+      // Load existing conversation and verify ownership
       conversation = await this.conversationsService.findOne(
         conversationId,
         userId,
       );
 
-      const messageHistory = await this.messagesService.findAll(
-        conversationId,
-        userId,
-      );
-
-      messages = messageHistory.map((msg) => ({
-        role: msg.role.toLowerCase() as 'user' | 'assistant' | 'system',
-        content: msg.content,
-      }));
+      // Load message history
+      history = await this.buildMessageHistory(conversationId, userId);
     } else {
+      // Create new conversation
       const title =
         prompt.length > 50 ? prompt.substring(0, 50) + '...' : prompt;
       conversation = await this.conversationsService.create(
@@ -363,21 +354,71 @@ ${doc.content}
       );
     }
 
-    // Add system prompt at the beginning
-    messages.unshift({ role: 'system', content: systemPrompt });
+    return { conversation, history };
+  }
 
-    // Add current user message
-    messages.push({ role: 'user', content: prompt });
-
-    // Store user message
-    await this.messagesService.create(conversation.id, userId, 'USER', prompt);
-
-    // Send conversation ID first
-    res.write(
-      `data: ${JSON.stringify({ conversationId: conversation.id })}\n\n`,
+  /**
+   * Load and format message history for OpenAI
+   */
+  private async buildMessageHistory(
+    conversationId: string,
+    userId: string,
+  ): Promise<OpenAIMessage[]> {
+    const messageHistory = await this.messagesService.findAll(
+      conversationId,
+      userId,
     );
 
-    // Call OpenAI with streaming
+    return messageHistory.map((msg) => ({
+      role: msg.role.toLowerCase() as 'user' | 'assistant' | 'system',
+      content: msg.content,
+    }));
+  }
+
+  /**
+   * Build OpenAI messages array with system prompt, history, and current user input
+   */
+  private buildOpenAIMessages(
+    systemPrompt: string,
+    history: OpenAIMessage[],
+    userInput: string,
+  ): OpenAIMessage[] {
+    const messages: OpenAIMessage[] = [];
+
+    // Add system prompt at the beginning
+    messages.push({ role: 'system', content: systemPrompt });
+
+    // Add message history (excluding any existing system messages)
+    messages.push(...history.filter((msg) => msg.role !== 'system'));
+
+    // Add current user message
+    messages.push({ role: 'user', content: userInput });
+
+    return messages;
+  }
+
+  /**
+   * Send OpenAI completion request (non-streaming)
+   */
+  private async sendOpenAICompletion(
+    messages: OpenAIMessage[],
+  ): Promise<string | null> {
+    const completion = await this.client.chat.completions.create({
+      model: this.model,
+      messages: messages as any,
+    });
+
+    return completion.choices[0].message.content;
+  }
+
+  /**
+   * Send OpenAI streaming request
+   * Returns the full accumulated response
+   */
+  private async sendOpenAIStreaming(
+    messages: OpenAIMessage[],
+    res: Response,
+  ): Promise<string> {
     const stream = await this.client.chat.completions.create({
       model: this.model,
       messages: messages as any,
@@ -394,18 +435,6 @@ ${doc.content}
       }
     }
 
-    // Store assistant message
-    if (fullResponse) {
-      await this.messagesService.create(
-        conversation.id,
-        userId,
-        'ASSISTANT',
-        fullResponse,
-      );
-    }
-
-    // Send done signal
-    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
-    res.end();
+    return fullResponse;
   }
 }

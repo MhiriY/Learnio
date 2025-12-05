@@ -25,4 +25,3 @@ export class UpdateDocumentDto {
   @IsString()
   summary?: string;
 }
-

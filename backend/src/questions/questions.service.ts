@@ -8,7 +8,9 @@ import { QuestionResponseDto } from './dto/question-response.dto.js';
 export class QuestionsService {
   constructor(private prisma: PrismaService) {}
 
-  async create(createQuestionDto: CreateQuestionDto): Promise<QuestionResponseDto> {
+  async create(
+    createQuestionDto: CreateQuestionDto,
+  ): Promise<QuestionResponseDto> {
     const question = await (this.prisma as any).question.create({
       data: createQuestionDto,
     });
@@ -25,6 +27,7 @@ export class QuestionsService {
 
   async findAll(): Promise<QuestionResponseDto[]> {
     const questions = await (this.prisma as any).question.findMany();
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     return questions.map((q: any) => ({
       id: q.id,
       question: q.question,
@@ -95,4 +98,3 @@ export class QuestionsService {
     });
   }
 }
-

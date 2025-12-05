@@ -26,6 +26,7 @@ export class DocumentChunksService {
 
   async findAll(): Promise<DocumentChunkResponseDto[]> {
     const chunks = await (this.prisma as any).documentChunk.findMany();
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     return chunks.map((chunk: any) => ({
       id: chunk.id,
       index: chunk.index,
@@ -93,4 +94,3 @@ export class DocumentChunksService {
     });
   }
 }
-

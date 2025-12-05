@@ -25,7 +25,6 @@ import {
 } from '@nestjs/swagger';
 import { DocumentsService } from './documents.service.js';
 import { DocumentProcessingService } from './document-processing.service.js';
-import { UploadDocumentDto } from './dto/upload-document.dto.js';
 import { CreateDocumentDto } from './dto/create-document.dto.js';
 import { UpdateDocumentDto } from './dto/update-document.dto.js';
 import { DocumentResponseDto } from './dto/document-response.dto.js';
@@ -210,6 +209,7 @@ export class DocumentsController {
       },
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     return chunks;
   }
 

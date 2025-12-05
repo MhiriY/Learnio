@@ -66,9 +66,7 @@ export class RetrievalService {
     });
 
     if (allChunksCount === 0) {
-      this.logger.warn(
-        `No chunks found for document ${documentId}`,
-      );
+      this.logger.warn(`No chunks found for document ${documentId}`);
       return [];
     }
 
@@ -85,9 +83,8 @@ export class RetrievalService {
     }
 
     // Generate embedding for the query ONCE
-    const queryEmbedding = await this.embeddingsService.generateEmbedding(
-      userQuery,
-    );
+    const queryEmbedding =
+      await this.embeddingsService.generateEmbedding(userQuery);
 
     this.logger.log(
       `[Memory: ${this.getMemoryUsage()}MB] Generated query embedding (${queryEmbedding.length} dimensions)`,

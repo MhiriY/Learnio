@@ -3,4 +3,3 @@ export class ExtractTextResponseDto {
   content: string;
   status: string;
 }
-

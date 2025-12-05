@@ -37,7 +37,8 @@ export class ChunkingService {
       }
 
       // Check if adding this word would exceed limits
-      const wouldExceedChars = currentCharCount + wordLength > this.maxCharsPerChunk;
+      const wouldExceedChars =
+        currentCharCount + wordLength > this.maxCharsPerChunk;
       const wouldExceedWords =
         !isWhitespace && currentWordCount >= this.targetWordsPerChunk;
 

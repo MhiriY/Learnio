@@ -27,7 +27,10 @@ export class ConversationsController {
   ) {}
 
   @Post()
-  create(@Req() req: any, @Body() createConversationDto: CreateConversationDto) {
+  create(
+    @Req() req: any,
+    @Body() createConversationDto: CreateConversationDto,
+  ) {
     return this.conversationsService.create(
       req.user.id,
       createConversationDto.documentId,
@@ -68,4 +71,3 @@ export class ConversationsController {
     return this.conversationsService.remove(id, req.user.id);
   }
 }
-

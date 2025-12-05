@@ -46,8 +46,9 @@ export class AuthController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Get('me')
-  async me(@Req() req: any) {
+  me(@Req() req: any) {
     // req.user is set by JwtStrategy.validate()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     return req.user;
   }
 }

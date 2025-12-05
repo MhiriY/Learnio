@@ -12,4 +12,3 @@ export class UpdateDocumentChunkDto {
   @IsOptional()
   embedding?: any;
 }
-

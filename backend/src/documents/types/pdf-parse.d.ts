@@ -8,11 +8,7 @@ declare module 'pdf-parse-fixed' {
     version: string;
   }
 
-  function pdfParse(
-    dataBuffer: Buffer,
-    options?: any,
-  ): Promise<PDFData>;
+  function pdfParse(dataBuffer: Buffer, options?: any): Promise<PDFData>;
 
   export default pdfParse;
 }
-

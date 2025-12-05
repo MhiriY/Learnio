@@ -18,9 +18,7 @@ import { DocumentChunkResponseDto } from './dto/document-chunk-response.dto.js';
 @ApiTags('document-chunks')
 @Controller('document-chunks')
 export class DocumentChunksController {
-  constructor(
-    private readonly documentChunksService: DocumentChunksService,
-  ) {}
+  constructor(private readonly documentChunksService: DocumentChunksService) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -103,4 +101,3 @@ export class DocumentChunksController {
     return this.documentChunksService.remove(id);
   }
 }
-

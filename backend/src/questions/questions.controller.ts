@@ -101,4 +101,3 @@ export class QuestionsController {
     return this.questionsService.remove(id);
   }
 }
-

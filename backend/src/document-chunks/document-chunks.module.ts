@@ -10,4 +10,3 @@ import { PrismaModule } from '../prisma/prisma.module.js';
   exports: [DocumentChunksService],
 })
 export class DocumentChunksModule {}
-

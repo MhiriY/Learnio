@@ -5,4 +5,3 @@ export class DocumentChunkResponseDto {
   embedding?: any;
   documentId: string;
 }
-
