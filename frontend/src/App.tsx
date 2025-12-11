@@ -4,6 +4,9 @@ import { ThemeProvider } from './theme/ThemeContext';
 import { LoginPage } from './pages/LoginPage';
 import { SignupPage } from './pages/SignupPage';
 import { LandingPage } from './pages/LandingPage';
+import { CoursesPage } from './pages/CoursesPage';
+import { CourseDetailPage } from './pages/CourseDetailPage';
+import { CourseChatPage } from './pages/CourseChatPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import './App.css';
 
@@ -16,14 +19,30 @@ function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/signup" element={<SignupPage />} />
             <Route
-              path="/chat"
+              path="/courses"
               element={
                 <ProtectedRoute>
-                  <LandingPage />
+                  <CoursesPage />
                 </ProtectedRoute>
               }
             />
-            <Route path="/" element={<Navigate to="/chat" replace />} />
+            <Route
+              path="/courses/:id"
+              element={
+                <ProtectedRoute>
+                  <CourseDetailPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/chat"
+              element={
+                <ProtectedRoute>
+                  <CourseChatPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/" element={<Navigate to="/courses" replace />} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>

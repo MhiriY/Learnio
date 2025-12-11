@@ -19,7 +19,7 @@ export function LoginPage() {
     try {
       const response = await login({ email, password });
       setAuth(response.accessToken, response.user);
-      navigate('/chat');
+      navigate('/courses');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to log in');
     } finally {

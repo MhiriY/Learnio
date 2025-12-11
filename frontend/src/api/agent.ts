@@ -12,12 +12,21 @@ export interface AskAgentResponse {
 export interface ChatRequest {
   prompt: string;
   conversationId?: string;
+  courseId?: string;
   documentId?: string;
+}
+
+export interface RAGSource {
+  documentId: string;
+  documentName: string;
+  chunkIndex: number;
+  content: string;
 }
 
 export interface ChatResponse {
   conversationId: string;
   answer: string;
+  sources?: RAGSource[];
 }
 
 /**
@@ -67,18 +76,21 @@ export async function docChat(documentId: string, prompt: string) {
  * Chat with the agent using conversation persistence
  * @param prompt - The user's prompt
  * @param conversationId - Optional conversation ID to continue a conversation
+ * @param courseId - Optional course ID to use course-level context
  * @param documentId - Optional document ID to use as context
  * @returns The agent's response and conversation ID
  */
 export async function chat(
   prompt: string,
   conversationId?: string,
+  courseId?: string,
   documentId?: string
 ): Promise<ChatResponse> {
   try {
     const response = await axiosInstance.post<ChatResponse>('/agent/chat', {
       prompt,
       conversationId,
+      courseId,
       documentId,
     } as ChatRequest);
     return response.data;
@@ -98,6 +110,7 @@ export async function chat(
  * Chat with the agent using streaming responses
  * @param prompt - The user's prompt
  * @param conversationId - Optional conversation ID to continue a conversation
+ * @param courseId - Optional course ID to use course-level context
  * @param documentId - Optional document ID to use as context
  * @param onChunk - Callback for each chunk of the response
  * @param onComplete - Callback when streaming is complete
@@ -105,9 +118,10 @@ export async function chat(
 export async function chatStream(
   prompt: string,
   conversationId: string | undefined,
+  courseId: string | undefined,
   documentId: string | undefined,
   onChunk: (content: string) => void,
-  onComplete: (conversationId: string) => void,
+  onComplete: (conversationId: string, sources?: RAGSource[]) => void,
   onError: (error: Error) => void
 ): Promise<void> {
   try {
@@ -123,6 +137,7 @@ export async function chatStream(
         body: JSON.stringify({
           prompt,
           conversationId,
+          courseId,
           documentId,
         }),
       }
@@ -141,6 +156,7 @@ export async function chatStream(
 
     let buffer = '';
     let receivedConversationId: string | null = null;
+    let receivedSources: RAGSource[] | undefined = undefined;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -162,8 +178,11 @@ export async function chatStream(
               if (parsed.content) {
                 onChunk(parsed.content);
               }
+              if (parsed.sources) {
+                receivedSources = parsed.sources;
+              }
               if (parsed.done && receivedConversationId) {
-                onComplete(receivedConversationId);
+                onComplete(receivedConversationId, receivedSources);
                 return;
               }
               if (parsed.error) {

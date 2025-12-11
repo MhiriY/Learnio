@@ -443,7 +443,10 @@ export class AgentService {
     // Concatenate document contents (limit to avoid token overflow)
     const maxContentLength = 10000; // Approximate limit
     let totalContent = '';
-    const usedDocuments: Array<{ documentId?: string; documentFilename?: string }> = [];
+    const usedDocuments: Array<{
+      documentId?: string;
+      documentFilename?: string;
+    }> = [];
 
     for (const doc of documents) {
       if (doc.content && totalContent.length < maxContentLength) {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ChatBox } from '../components/ChatBox';
 import { ConversationsSidebar } from '../components/ConversationsSidebar';
 import { DocumentContextBanner } from '../components/DocumentContextBanner';
@@ -11,6 +11,7 @@ import { useTheme } from '../theme/ThemeContext';
 
 export function LandingPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [isLoading, setIsLoading] = useState(false);
@@ -20,12 +21,25 @@ export function LandingPage() {
   const [uploadedDocument, setUploadedDocument] =
     useState<DocumentResponseDto | null>(null);
   const [currentDocumentId, setCurrentDocumentId] = useState<string | null>(null);
+  const [currentCourseId, setCurrentCourseId] = useState<string | null>(null);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [streamingMessage, setStreamingMessage] = useState<string>('');
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [sidebarRefreshTrigger, setSidebarRefreshTrigger] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Read courseId and documentId from URL params on mount
+  useEffect(() => {
+    const courseId = searchParams.get('courseId');
+    const documentId = searchParams.get('documentId');
+    if (courseId) {
+      setCurrentCourseId(courseId);
+    }
+    if (documentId) {
+      setCurrentDocumentId(documentId);
+    }
+  }, [searchParams]);
 
   // Load messages when conversation changes
   useEffect(() => {
@@ -80,6 +94,7 @@ export function LandingPage() {
       await chatStream(
         prompt,
         currentConversationId || undefined,
+        currentCourseId || undefined,
         currentDocumentId || undefined,
         (content: string) => {
           // Update streaming message in real-time

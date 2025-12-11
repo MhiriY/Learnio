@@ -24,7 +24,7 @@ export function SignupPage() {
         name: name || undefined,
       });
       setAuth(response.accessToken, response.user);
-      navigate('/chat');
+      navigate('/courses');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to sign up');
     } finally {

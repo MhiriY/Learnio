@@ -6,11 +6,16 @@ export interface Conversation {
   userId: string;
   title: string | null;
   documentId: string | null;
+  courseId: string | null;
   createdAt: string;
   updatedAt: string;
   document?: {
     id: string;
     originalFilename: string | null;
+  };
+  course?: {
+    id: string;
+    title: string;
   };
   _count?: {
     messages: number;
