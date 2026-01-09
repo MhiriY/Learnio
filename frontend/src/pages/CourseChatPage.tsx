@@ -9,7 +9,7 @@ import {
 } from '../api/courses';
 import { getDocument, DocumentResponseDto } from '../api/documents';
 import { getMessages, Message } from '../api/messages';
-import { getConversations, Conversation } from '../api/conversations';
+import { getConversations } from '../api/conversations';
 import { ChatBox } from '../components/ChatBox';
 import { DocumentSidebar } from '../components/DocumentSidebar';
 import { PDFViewer } from '../components/PDFViewer';
@@ -367,11 +367,16 @@ export function CourseChatPage() {
       </div>
 
       <div style={styles.mainContainer}>
-        <DocumentSidebar
-          documents={documents}
-          currentDocumentId={documentId || null}
-          onSelectDocument={handleDocumentSelect}
-        />
+        <div style={styles.sidebarContainer}>
+          <DocumentSidebar
+            documents={documents}
+            currentDocumentId={documentId || null}
+            onSelectDocument={handleDocumentSelect}
+          />
+          {isLoadingDocuments && (
+            <div style={styles.sidebarLoading}>Loading documents…</div>
+          )}
+        </div>
 
         <div style={styles.chatBody}>
           {/* Context indicator */}
@@ -566,6 +571,26 @@ function getStyles(theme: 'light' | 'dark') {
       flex: 1,
       display: 'flex',
       overflow: 'hidden',
+    },
+    sidebarContainer: {
+      position: 'relative' as const,
+      height: '100%',
+    },
+    sidebarLoading: {
+      position: 'absolute' as const,
+      left: 0,
+      right: 0,
+      top: 0,
+      padding: '10px 12px',
+      fontSize: '12px',
+      fontWeight: '600',
+      textAlign: 'center' as const,
+      backgroundColor: isDark
+        ? 'rgba(42, 42, 42, 0.95)'
+        : 'rgba(255, 255, 255, 0.95)',
+      borderBottom: `1px solid ${isDark ? '#3a3a3a' : '#e9ecef'}`,
+      color: isDark ? '#b0b0b0' : '#6c757d',
+      pointerEvents: 'none' as const,
     },
     pdfPanel: {
       width: '400px',

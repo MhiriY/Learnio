@@ -19,24 +19,7 @@ services:
     networks:
       - learnio-network
 
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: learnio-pgadmin
-    restart: unless-stopped
-    ports:
-      - "${PGADMIN_PORT:-5050}:80"
-    environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@learnio.com}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
-      PGADMIN_CONFIG_SERVER_MODE: 'False'
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
-    networks:
-      - learnio-network
-    depends_on:
-      - postgres
-
-  # Production service - built from Dockerfile, no volume mounts
+  # Backend (production)
   backend:
     build:
       context: .
@@ -51,25 +34,66 @@ services:
       - PORT=${PORT:-3000}
       - NODE_ENV=production
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - FRONTEND_URL=http://localhost:5173
     depends_on:
       postgres:
         condition: service_healthy
     networks:
       - learnio-network
+    volumes:
+      - ./backend/uploads:/app/uploads
 
-  # Development service - uses volume mounts, no image build
+  # Frontend (static build served by nginx)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+    container_name: learnio-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      # Keep host port 5173 so backend CORS default works out of the box.
+      - "${FRONTEND_PORT:-5173}:80"
+    networks:
+      - learnio-network
+
+  # PgAdmin (optional tooling)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: learnio-pgadmin
+    restart: unless-stopped
+    profiles: ["tools"]
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@learnio.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - learnio-network
+    depends_on:
+      - postgres
+
+  # Backend (development, hot reload) - run with: docker compose --profile dev up
   backend-dev:
     image: node:20-alpine
     container_name: learnio-backend-dev
     restart: unless-stopped
+    profiles: ["dev"]
     working_dir: /app
     ports:
-      - "${PORT:-3000}:3000"
+      - "${DEV_BACKEND_PORT:-3001}:3000"
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-learnio}?schema=public
-      - PORT=${PORT:-3000}
+      - PORT=3000
       - NODE_ENV=development
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - FRONTEND_URL=http://localhost:5173
       - CHOKIDAR_USEPOLLING=true
       - WATCHPACK_POLLING=true
     depends_on:
@@ -79,12 +103,13 @@ services:
       - learnio-network
     volumes:
       - ./backend:/app
-      - ./backend/node_modules:/app/node_modules
-    command: sh -c "npx prisma generate && npm run start:dev"
+      - backend_node_modules:/app/node_modules
+    command: sh -c "npm ci && npx prisma generate && npm run start:dev"
 
 volumes:
   postgres_data:
   pgadmin_data:
+  backend_node_modules:
 
 networks:
   learnio-network:

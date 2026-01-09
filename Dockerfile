@@ -46,15 +46,8 @@ COPY --from=builder /app/dist ./dist
 # Copy Prisma generated client
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
-# Create non-root user for security
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nestjs -u 1001 && \
-    chown -R nestjs:nodejs /app
-
-USER nestjs
-
 # Expose port
 EXPOSE 3000
 
 # Run migrations and start the application
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/src/main.js"]

@@ -33,130 +33,47 @@ $ npm install
 
 ## Docker Setup
 
-This project uses Docker Compose with separate services for development and production environments.
+This project is fully dockerized (Postgres + NestJS backend + React frontend).
 
 ### Prerequisites
 
-- Docker and Docker Compose installed on your system
-- Node.js and npm installed locally (for dependency management)
+- Docker Desktop (includes Docker Compose)
 
-### Development Setup
+### One-command startup (recommended)
 
-**Important**: Dependencies are installed on your **host machine**, not inside the container.
-
-1. **Install dependencies locally** (required before starting containers):
-   ```bash
-   npm install
-   ```
-
-2. **Create a `.env` file** (copy from `.env.example`):
-   ```bash
-   cp .env.example .env
-   ```
-
-3. **Start development services**:
-   ```bash
-   docker-compose up backend-dev postgres pgadmin
-   ```
-
-   This will:
-   - Start PostgreSQL database container
-   - Start pgAdmin container
-   - Generate Prisma Client (if not already generated)
-   - Start the NestJS application in development mode with hot-reload
-   - Mount your local source code and `node_modules` into the container
-
-   **Note**: Prisma Client is automatically generated on container startup. If you modify the Prisma schema, restart the container to regenerate the client.
-
-4. **Run Prisma migrations** (first time setup):
-   ```bash
-   # Option 1: Run inside the container
-   docker-compose exec backend-dev npx prisma migrate dev
-
-   # Option 2: Run locally (if you have DATABASE_URL in .env pointing to localhost:5432)
-   npm run prisma:migrate
-   ```
-
-5. **Generate Prisma Client** (if needed):
-   ```bash
-   # Inside container or locally
-   docker-compose exec backend-dev npx prisma generate
-   # Or locally: npm run prisma:generate
-   ```
-
-**Development Workflow:**
-- Install new packages locally: `npm install <package-name>`
-- The container uses your local `node_modules` via volume mount
-- Source code changes are automatically reflected (hot-reload)
-- No need to rebuild containers when adding dependencies
-
-### Production Setup
-
-1. **Build and start production services**:
-   ```bash
-   docker-compose up backend postgres
-   ```
-
-   This will:
-   - Build the production Docker image (multi-stage build)
-   - Bundle all dependencies and compiled code inside the image
-   - Run database migrations automatically on startup
-   - Start the optimized production application
-
-2. **Or build the production image separately**:
-   ```bash
-   docker build --target production -t learnio:latest .
-   docker run -p 3000:3000 --env-file .env learnio:latest
-   ```
-
-**Production Features:**
-- No volume mounts (everything bundled in image)
-- Optimized multi-stage build
-- Production dependencies only
-- Automatic database migrations on startup
-- Non-root user for security
-- Health checks enabled
-
-### Useful Commands
+1. (Optional) Copy env defaults and set your OpenAI key:
 
 ```bash
-# Development
-docker-compose up backend-dev postgres pgadmin    # Start dev services
-docker-compose logs -f backend-dev                 # View dev logs
-docker-compose exec backend-dev npm run prisma:studio  # Prisma Studio
-
-# Production
-docker-compose up backend postgres                 # Start prod services
-docker-compose logs -f backend                     # View prod logs
-
-# Database
-docker-compose exec postgres psql -U postgres -d learnio  # Access PostgreSQL
-docker-compose exec backend-dev npx prisma studio        # Prisma Studio (dev)
-
-# General
-docker-compose down                                # Stop all services
-docker-compose down -v                             # Stop and remove volumes (⚠️ deletes database data)
-docker-compose build backend                       # Rebuild production image
+copy env.example .env
 ```
 
-### Architecture
+2. Start everything:
 
-- **`backend-dev`**: Development service using volume mounts, runs `npm run start:dev` with hot-reload
-- **`backend`**: Production service built from Dockerfile, runs compiled `node dist/main.js`
-- **`postgres`**: PostgreSQL 16 database
-- **`pgadmin`**: Database administration interface
+```bash
+docker compose up --build
+```
 
-### Dependency Management
+- Frontend: `http://localhost:5173`
+- Backend API: `http://localhost:3000`
+- Swagger: `http://localhost:3000/api`
 
-**Development:**
-- Dependencies are installed on your host machine: `npm install`
-- The `node_modules` folder is mounted into the container
-- When you add a new package, install it locally and restart the container
+### Optional tooling (pgAdmin)
 
-**Production:**
-- Dependencies are installed during Docker build
-- All dependencies are bundled in the final image
-- No runtime dependency installation
+```bash
+docker compose --profile tools up
+```
+
+### Backend dev mode (hot reload)
+
+```bash
+docker compose --profile dev up --build
+```
+
+### Notes
+
+- Backend runs `prisma migrate deploy` automatically on startup.
+- Uploaded files are persisted to `backend/uploads` (bind-mounted into the backend container).
+- If you previously ran the stack and migrations got into a bad state, reset the DB with: `docker compose down -v` (⚠️ deletes local DB data).
 
 ## How to Run the Project Locally
 

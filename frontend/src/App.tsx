@@ -3,7 +3,6 @@ import { AuthProvider } from './auth/AuthContext';
 import { ThemeProvider } from './theme/ThemeContext';
 import { LoginPage } from './pages/LoginPage';
 import { SignupPage } from './pages/SignupPage';
-import { LandingPage } from './pages/LandingPage';
 import { CoursesPage } from './pages/CoursesPage';
 import { CourseDetailPage } from './pages/CourseDetailPage';
 import { CourseChatPage } from './pages/CourseChatPage';
