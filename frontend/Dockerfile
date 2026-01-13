@@ -1,23 +1,21 @@
-FROM node:20-alpine AS builder
+# Development Dockerfile for Frontend
+FROM node:20-alpine
 
 WORKDIR /app
 
+# Copy package files
 COPY package*.json ./
+
+# Install all dependencies (including devDependencies for hot reload)
 RUN npm ci
 
-COPY . .
+# Expose port
+EXPOSE 3001
 
-# Vite only exposes env vars prefixed with VITE_ at build time.
-ARG VITE_API_URL=http://localhost:3000
-ENV VITE_API_URL=$VITE_API_URL
+# Set environment
+ENV NODE_ENV=development
+ENV HOSTNAME=0.0.0.0
 
-RUN npm run build
-
-FROM nginx:1.27-alpine AS production
-
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=builder /app/dist /usr/share/nginx/html
-
-EXPOSE 80
-
+# Start development server with hot reload
+CMD ["npm", "run", "dev"]
 

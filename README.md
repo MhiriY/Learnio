@@ -57,22 +57,23 @@ docker compose up --build
 - Backend API: `http://localhost:3000`
 - Swagger: `http://localhost:3000/api`
 
+### Production mode (optional)
+
+```bash
+docker compose --profile prod up --build
+```
+
 ### Optional tooling (pgAdmin)
 
 ```bash
 docker compose --profile tools up
 ```
 
-### Backend dev mode (hot reload)
-
-```bash
-docker compose --profile dev up --build
-```
-
 ### Notes
 
+- `docker compose up` runs **dev mode with hot reload** for both backend and frontend.
 - Backend runs `prisma migrate deploy` automatically on startup.
-- Uploaded files are persisted to `backend/uploads` (bind-mounted into the backend container).
+- Uploaded files are persisted to `backend/uploads` (bind-mounted into the backend container in prod; in dev it writes into `backend/uploads` via the bind mount).
 - If you previously ran the stack and migrations got into a bad state, reset the DB with: `docker compose down -v` (⚠️ deletes local DB data).
 
 ## How to Run the Project Locally
